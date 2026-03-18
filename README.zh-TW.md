@@ -27,6 +27,8 @@
   <a href="README.md">English</a> | 繁體中文
 </p>
 
+> Fork 自 [moazbuilds/ClaudeClaw](https://github.com/moazbuilds/ClaudeClaw)，以 Go 重寫，產出單一二進位檔，零依賴部署。
+
 ClaudeClaw 將你的 Claude Code 變成一個永不休息的個人助理。它以背景常駐程式（daemon）執行，按排程自動處理任務、透過 Telegram 和 Discord 回覆訊息、轉譯語音指令，並可整合任何你需要的服務。
 
 > 注意：請勿將 ClaudeClaw 用於入侵銀行系統或任何違法活動。謝謝。

@@ -23,6 +23,8 @@
 
 <p align="center"><b>A lightweight, open-source OpenClaw version built into your Claude Code.</b></p>
 
+> Forked from [moazbuilds/ClaudeClaw](https://github.com/moazbuilds/ClaudeClaw) and rewritten in Go for a single-binary, zero-dependency deployment.
+
 ClaudeClaw turns your Claude Code into a personal assistant that never sleeps. It runs as a background daemon, executing tasks on a schedule, responding to messages on Telegram and Discord, transcribing voice commands, and integrating with any service you need.
 
 > Note: Please don't use ClaudeClaw for hacking any bank system or doing any illegal activities. Thank you.
