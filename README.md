@@ -82,62 +82,34 @@ The setup wizard walks you through model, heartbeat, Telegram, Discord, and secu
 - **Security Levels:** Four access levels from read-only to full system access.
 - **Model Selection:** Switch models based on your workload.
 
-## Using the Go Version
+## Build & Run
 
-A Go rewrite lives in `go-rewrite/`. It produces a single binary with no runtime dependencies — no Bun or Node required.
+ClaudeClaw is a single Go binary with no runtime dependencies.
 
 ### Build
 
 ```bash
-cd go-rewrite
-go build -o claudeclaw ./cmd/claudeclaw
+go build -o claudeclaw-bin ./cmd/claudeclaw
 ```
 
-### Run Standalone
-
-The Go binary mirrors the TypeScript CLI exactly:
+### CLI Commands
 
 ```bash
-./claudeclaw start              # Start daemon (interactive setup wizard)
-./claudeclaw start --web        # Start with web dashboard
-./claudeclaw status             # Check daemon status
-./claudeclaw send "your prompt" # Send a one-shot prompt
-./claudeclaw telegram           # Start Telegram bot
-./claudeclaw discord            # Start Discord bot
-./claudeclaw --stop             # Stop daemon
-./claudeclaw --clear            # Backup and reset session
+./claudeclaw-bin start              # Start daemon (interactive setup wizard)
+./claudeclaw-bin start --web        # Start with web dashboard
+./claudeclaw-bin status             # Check daemon status
+./claudeclaw-bin send "your prompt" # Send a one-shot prompt
+./claudeclaw-bin telegram           # Start Telegram bot
+./claudeclaw-bin discord            # Start Discord bot
+./claudeclaw-bin --stop             # Stop daemon
+./claudeclaw-bin --clear            # Backup and reset session
 ```
 
-### Use Inside Claude Code (like `/claudeclaw:start`)
+### Cross-compile
 
-To use the Go binary as the backend for Claude Code slash commands, replace the Bun invocation in the launch step with the Go binary path:
-
-1. **Build the binary** and place it somewhere accessible (e.g. the project root or `go-rewrite/`):
-   ```bash
-   cd go-rewrite && go build -o claudeclaw ./cmd/claudeclaw
-   ```
-
-2. **Start the daemon** from your project directory:
-   ```bash
-   mkdir -p .claude/claudeclaw/logs
-   nohup ./go-rewrite/claudeclaw start --web > .claude/claudeclaw/logs/daemon.log 2>&1 &
-   ```
-
-3. **Resume the shared session** in Claude Code:
-   ```bash
-   claude --resume $(cat .claude/claudeclaw/session.json | grep -o '"sessionId":"[^"]*"' | cut -d'"' -f4)
-   ```
-
-All slash commands (`/claudeclaw:status`, `/claudeclaw:stop`, etc.) work the same way — they read from the same `.claude/claudeclaw/` state directory. The Go binary and TypeScript version share identical config and state formats, so you can switch between them freely.
-
-### Why Go?
-
-| | TypeScript (Bun) | Go |
-| --- | --- | --- |
-| Dependencies | Requires Bun + Node | Single ~11 MB binary |
-| Deployment | Install Bun first | Copy binary and run |
-| Performance | V8 runtime overhead | Native execution |
-| Cross-compile | N/A | `GOOS=linux GOARCH=arm64 go build` |
+```bash
+GOOS=linux GOARCH=arm64 go build -o claudeclaw-bin ./cmd/claudeclaw
+```
 
 ## FAQ
 

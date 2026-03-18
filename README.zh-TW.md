@@ -95,55 +95,52 @@ claude plugin install claudeclaw
 
 ## 指令參考
 
+### 編譯
+
+```bash
+go build -o claudeclaw-bin ./cmd/claudeclaw
+```
+
 ### 常駐程式控制
 
 ```bash
 # 啟動常駐程式
-bun run src/index.ts start
-
-# 開發模式（含 Web UI 與熱重載）
-bun run dev:web
+./claudeclaw-bin start
 
 # 附帶 Web 儀表板啟動
-bun run src/index.ts start --web
-
-# 單次執行提示詞
-bun run src/index.ts start --prompt "你的指令"
-
-# 執行啟動觸發器
-bun run src/index.ts start --trigger
+./claudeclaw-bin start --web
 
 # 查看狀態
-bun run src/index.ts status
+./claudeclaw-bin status
 
 # 停止常駐程式
-bun run src/index.ts stop
+./claudeclaw-bin --stop
 
 # 備份並重設工作階段
-bun run src/index.ts clear
+./claudeclaw-bin --clear
 ```
 
 ### 單次訊息發送
 
 ```bash
 # 發送提示詞至運行中的常駐程式
-bun run src/index.ts send "你的指令"
+./claudeclaw-bin send "你的指令"
 
 # 發送並轉發結果至 Telegram
-bun run src/index.ts send "你的指令" --telegram
+./claudeclaw-bin send "你的指令" --telegram
 
 # 發送並轉發結果至 Discord
-bun run src/index.ts send "你的指令" --discord
+./claudeclaw-bin send "你的指令" --discord
 ```
 
 ### 機器人獨立模式
 
 ```bash
 # 以獨立模式啟動 Telegram 機器人
-bun run src/index.ts telegram
+./claudeclaw-bin telegram
 
 # 以獨立模式啟動 Discord 機器人
-bun run src/index.ts discord
+./claudeclaw-bin discord
 ```
 
 ### 透過 Claude Code 技能介面
@@ -166,36 +163,29 @@ bun run src/index.ts discord
 
 ### 技術堆疊
 
-- **執行環境：** Bun（TypeScript，ESM 模組）
-- **目標語法：** ESNext，bundler 模組解析
-- **Go 重寫：** 進行中（位於 `go-rewrite/`），使用 Go 1.24.7
+- **語言：** Go 1.24+
+- **產出：** 單一靜態二進位檔，無執行環境依賴
 
 ### 目錄結構
 
 ```
 claudeclaw/
-├── src/                          # TypeScript 主程式碼
-│   ├── index.ts                  # CLI 進入點與指令路由
-│   ├── runner.ts                 # 主要常駐迴圈
-│   ├── config.ts                 # 設定管理
-│   ├── cron.ts                   # Cron 表達式匹配
-│   ├── jobs.ts                   # 排程任務解析
-│   ├── sessions.ts               # Claude Code 工作階段管理
-│   ├── skills.ts                 # 技能探索與路由
-│   ├── whisper.ts                # 語音轉文字
+├── cmd/claudeclaw/main.go        # CLI 進入點與指令路由
+├── internal/                     # Go 套件
 │   ├── commands/                 # CLI 指令處理器
-│   │   ├── start.ts              #   常駐程式初始化
-│   │   ├── stop.ts               #   常駐程式關閉
-│   │   ├── telegram.ts           #   Telegram 機器人
-│   │   ├── discord.ts            #   Discord 機器人
-│   │   └── send.ts               #   單次提示詞執行
-│   └── ui/                       # Web 儀表板
-│       ├── server.ts             #   HTTP 伺服器（預設 127.0.0.1:4632）
-│       ├── services/             #   REST API 端點
-│       └── page/                 #   單頁式前端
-├── go-rewrite/                   # Go 重寫版本
-│   ├── cmd/claudeclaw/main.go    #   進入點
-│   └── internal/                 #   各模組對應 src/ 結構
+│   │   ├── start.go              #   常駐程式初始化
+│   │   ├── stop.go               #   常駐程式關閉
+│   │   ├── telegram.go           #   Telegram 機器人
+│   │   ├── discord.go            #   Discord 機器人
+│   │   └── send.go               #   單次提示詞執行
+│   ├── runner/                   #   主要常駐迴圈
+│   ├── config/                   #   設定管理
+│   ├── cron/                     #   Cron 表達式匹配
+│   ├── jobs/                     #   排程任務解析
+│   ├── sessions/                 #   Claude Code 工作階段管理
+│   ├── skills/                   #   技能探索與路由
+│   ├── whisper/                  #   語音轉文字
+│   └── web/                      #   Web 儀表板（HTTP 伺服器 + REST API + 前端）
 ├── prompts/                      # 系統提示詞
 │   ├── BOOTSTRAP.md              #   初次設定引導
 │   ├── SOUL.md                   #   人格與行為規範
@@ -282,62 +272,11 @@ notify: true
 | POST | `/api/jobs` | 建立排程任務 |
 | DELETE | `/api/jobs/<name>` | 刪除排程任務 |
 
-## 使用 Go 版本
-
-Go 重寫版本位於 `go-rewrite/`，產生單一二進位檔，無需 Bun 或 Node 等執行環境。
-
-### 編譯
+## 交叉編譯
 
 ```bash
-cd go-rewrite
-go build -o claudeclaw ./cmd/claudeclaw
+GOOS=linux GOARCH=arm64 go build -o claudeclaw-bin ./cmd/claudeclaw
 ```
-
-### 獨立執行
-
-Go 二進位檔與 TypeScript CLI 指令完全對應：
-
-```bash
-./claudeclaw start              # 啟動常駐程式（互動式設定精靈）
-./claudeclaw start --web        # 附帶 Web 儀表板啟動
-./claudeclaw status             # 查看常駐程式狀態
-./claudeclaw send "你的指令"     # 發送單次提示詞
-./claudeclaw telegram           # 啟動 Telegram 機器人
-./claudeclaw discord            # 啟動 Discord 機器人
-./claudeclaw --stop             # 停止常駐程式
-./claudeclaw --clear            # 備份並重設工作階段
-```
-
-### 在 Claude Code 中使用（類似 `/claudeclaw:start`）
-
-若要以 Go 二進位檔作為 Claude Code 斜線指令的後端，將啟動步驟中的 Bun 呼叫替換為 Go 二進位檔路徑即可：
-
-1. **編譯二進位檔**，放置於專案可存取的位置（如專案根目錄或 `go-rewrite/`）：
-   ```bash
-   cd go-rewrite && go build -o claudeclaw ./cmd/claudeclaw
-   ```
-
-2. **從專案目錄啟動常駐程式**：
-   ```bash
-   mkdir -p .claude/claudeclaw/logs
-   nohup ./go-rewrite/claudeclaw start --web > .claude/claudeclaw/logs/daemon.log 2>&1 &
-   ```
-
-3. **在 Claude Code 中恢復共享工作階段**：
-   ```bash
-   claude --resume $(cat .claude/claudeclaw/session.json | grep -o '"sessionId":"[^"]*"' | cut -d'"' -f4)
-   ```
-
-所有斜線指令（`/claudeclaw:status`、`/claudeclaw:stop` 等）運作方式不變——它們讀取相同的 `.claude/claudeclaw/` 狀態目錄。Go 二進位檔與 TypeScript 版本共用完全相同的設定與狀態格式，因此你可以隨時自由切換。
-
-### 為什麼選擇 Go？
-
-| | TypeScript (Bun) | Go |
-| --- | --- | --- |
-| 依賴 | 需要 Bun + Node | 單一約 11 MB 二進位檔 |
-| 部署 | 先安裝 Bun | 複製二進位檔即可執行 |
-| 效能 | V8 執行環境開銷 | 原生執行 |
-| 交叉編譯 | 不適用 | `GOOS=linux GOARCH=arm64 go build` |
 
 ## 截圖
 

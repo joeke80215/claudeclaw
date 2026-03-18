@@ -18,11 +18,7 @@ Start the ClaudeClaw daemon process with optional web dashboard.
 
 3. Start the daemon. Use `$ARGUMENTS` to check for flags like `--web`:
    ```bash
-   nohup bun run src/index.ts start $ARGUMENTS > .claude/claudeclaw/logs/daemon.log 2>&1 &
-   ```
-   Or if using the Go binary:
-   ```bash
-   nohup ./go-rewrite/claudeclaw start $ARGUMENTS > .claude/claudeclaw/logs/daemon.log 2>&1 &
+   nohup ./claudeclaw-bin start $ARGUMENTS > .claude/claudeclaw/logs/daemon.log 2>&1 &
    ```
 
 4. Verify the daemon started by checking that `.claude/claudeclaw/daemon.pid` was created.
