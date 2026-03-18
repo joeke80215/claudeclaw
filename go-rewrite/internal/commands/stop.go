@@ -7,11 +7,13 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/claudeclaw/claudeclaw/internal/pid"
 )
 
 // Stop reads the PID file, sends SIGTERM, and cleans up.
 func Stop() {
-	pidPath := pid_GetPidPath()
+	pidPath := pid.GetPidPath()
 	data, err := os.ReadFile(pidPath)
 	if err != nil {
 		fmt.Println("No daemon is running (PID file not found).")
@@ -32,7 +34,7 @@ func Stop() {
 		fmt.Printf("Stopped daemon (PID %s).\n", pidStr)
 	}
 
-	_ = os.Remove(pidPath)
+	_ = pid.CleanupPidFile()
 
 	// Teardown statusline
 	teardownStatusline()
@@ -106,12 +108,4 @@ func decodePath(encoded string) string {
 		return "/" + strings.ReplaceAll(encoded[1:], "-", "/")
 	}
 	return "/"
-}
-
-// pid_GetPidPath returns the path to the daemon PID file.
-// Duplicated here to avoid circular imports — the canonical implementation
-// is in the pid package.
-func pid_GetPidPath() string {
-	cwd, _ := os.Getwd()
-	return filepath.Join(cwd, ".claude", "claudeclaw", "daemon.pid")
 }
