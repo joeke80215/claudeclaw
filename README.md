@@ -119,6 +119,7 @@ To use the Go binary as the backend for Claude Code slash commands, replace the 
 
 2. **Start the daemon** from your project directory:
    ```bash
+   mkdir -p .claude/claudeclaw/logs
    nohup ./go-rewrite/claudeclaw start --web > .claude/claudeclaw/logs/daemon.log 2>&1 &
    ```
 

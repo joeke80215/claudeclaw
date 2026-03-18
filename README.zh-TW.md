@@ -319,6 +319,7 @@ Go 二進位檔與 TypeScript CLI 指令完全對應：
 
 2. **從專案目錄啟動常駐程式**：
    ```bash
+   mkdir -p .claude/claudeclaw/logs
    nohup ./go-rewrite/claudeclaw start --web > .claude/claudeclaw/logs/daemon.log 2>&1 &
    ```
 
