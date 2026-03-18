@@ -13,12 +13,25 @@ Start the heartbeat daemon for this project. Follow these steps exactly:
 
 2. **Check Go binary exists**:
    - Check if `./claudeclaw-bin` exists in the project root.
-   - If missing, check if `go` is available with `which go`.
-   - If `go` is available, build it:
+   - If missing, check if `cmd/claudeclaw/main.go` exists (i.e. source code is present).
+     - If source code is **not** present, clone it:
+       ```bash
+       git clone https://github.com/joeke80215/claudeclaw.git .claudeclaw-src && cp -r .claudeclaw-src/cmd .claudeclaw-src/internal .claudeclaw-src/go.mod .claudeclaw-src/go.sum .claudeclaw-src/prompts . 2>/dev/null; rm -rf .claudeclaw-src
+       ```
+   - Check if `go` is available with `which go`.
+   - If `go` is **not** available, auto-install it:
+     - macOS: `brew install go` (check `which brew` first; if Homebrew is missing, tell user to install Go manually from https://go.dev/dl/ and exit)
+     - Linux: download and install:
+       ```bash
+       curl -fsSL https://go.dev/dl/go1.24.1.linux-amd64.tar.gz -o /tmp/go.tar.gz && sudo tar -C /usr/local -xzf /tmp/go.tar.gz && rm /tmp/go.tar.gz
+       export PATH=$PATH:/usr/local/go/bin
+       ```
+     - If install fails, tell the user to install Go manually from https://go.dev/dl/ and exit.
+   - Build the binary:
      ```bash
      go build -o claudeclaw-bin ./cmd/claudeclaw
      ```
-   - If `go` is also missing, tell the user to either install Go (https://go.dev/dl/) and build, or download a pre-built binary from the GitHub releases page, then exit.
+   - If build fails, show the error and exit.
 
 3. **Check existing config**: Read `.claude/claudeclaw/settings.json` (if it exists). Determine which sections are already configured:
    - **Heartbeat configured** = `heartbeat.enabled` is `true` AND `heartbeat.prompt` is non-empty
