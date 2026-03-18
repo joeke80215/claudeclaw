@@ -1,4 +1,5 @@
 .claude
 node_modules
 .codemachine
-AGENTS.mdclaudeclaw-bin
+AGENTS.md
+claudeclaw-bin
