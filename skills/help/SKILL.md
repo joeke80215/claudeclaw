@@ -30,11 +30,11 @@ Show available ClaudeClaw commands and usage information.
 ## CLI Commands
 
 ```bash
-bun run src/index.ts start [--web]    # Start daemon
-bun run src/index.ts status [--all]   # Check status
-bun run src/index.ts send <prompt>    # Send one-shot prompt
-bun run src/index.ts telegram         # Start Telegram bot
-bun run src/index.ts discord          # Start Discord bot
+./claudeclaw-bin start [--web]    # Start daemon
+./claudeclaw-bin status [--all]   # Check status
+./claudeclaw-bin send <prompt>    # Send one-shot prompt
+./claudeclaw-bin telegram         # Start Telegram bot
+./claudeclaw-bin discord          # Start Discord bot
 ```
 
 ## Key Concepts

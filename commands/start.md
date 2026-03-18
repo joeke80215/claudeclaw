@@ -11,27 +11,14 @@ Start the heartbeat daemon for this project. Follow these steps exactly:
      - "CRITICAL BLOCKER: For security reasons, close this session and start a new one from the folder you want to initialize ClaudeClaw in."
    - Do not continue with any other step until they restart from a non-home project directory.
 
-2. **Runtime checker (Bun + Node)**:
-   - Run:
+2. **Check Go binary exists**:
+   - Check if `./claudeclaw-bin` exists in the project root.
+   - If missing, check if `go` is available with `which go`.
+   - If `go` is available, build it:
      ```bash
-     which bun
-     which node
+     go build -o claudeclaw-bin ./cmd/claudeclaw
      ```
-   - If `bun` is missing:
-     - Tell the user Bun is required and will be auto-installed.
-     - Run:
-       ```bash
-       curl -fsSL https://bun.sh/install | bash
-       ```
-     - Then source the shell profile to make `bun` available in the current session:
-       ```bash
-       source ~/.bashrc 2>/dev/null || source ~/.zshrc 2>/dev/null || true
-       ```
-     - Verify again with `which bun`. If still not found, tell the user installation failed and to install manually from https://bun.sh, then exit.
-     - Tell the user Bun was auto-installed successfully.
-   - If `node` is missing:
-     - Tell the user Node.js is required for the OGG converter helper.
-     - Ask them to install Node.js LTS and rerun start, then exit.
+   - If `go` is also missing, tell the user to either install Go (https://go.dev/dl/) and build, or download a pre-built binary from the GitHub releases page, then exit.
 
 3. **Check existing config**: Read `.claude/claudeclaw/settings.json` (if it exists). Determine which sections are already configured:
    - **Heartbeat configured** = `heartbeat.enabled` is `true` AND `heartbeat.prompt` is non-empty
@@ -107,7 +94,7 @@ Start the heartbeat daemon for this project. Follow these steps exactly:
 
 6. **Launch/start action**:
    ```bash
-   mkdir -p .claude/claudeclaw/logs && nohup bun run ${CLAUDE_PLUGIN_ROOT}/src/index.ts start --web > .claude/claudeclaw/logs/daemon.log 2>&1 & echo $!
+   mkdir -p .claude/claudeclaw/logs && nohup ./claudeclaw-bin start --web > .claude/claudeclaw/logs/daemon.log 2>&1 & echo $!
    ```
    Use the description "Starting ClaudeClaw server" for this command.
    Wait 1 second, then check `cat .claude/claudeclaw/logs/daemon.log`. If it contains "Aborted: daemon already running", tell the user and exit.
