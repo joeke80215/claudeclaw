@@ -18,16 +18,16 @@ Display this help information to the user:
 - `/heartbeat:help` — Show this help message
 
 **Start command options (CLI):**
-- `bun run src/index.ts start` — normal daemon mode
-- `bun run src/index.ts start --prompt "text"` — one-shot prompt, no daemon loop
-- `bun run src/index.ts start --trigger` — start daemon and run startup trigger once
-- `bun run src/index.ts start --prompt "text" --trigger` — start daemon and run startup trigger with custom prompt
+- `./claudeclaw-bin start` — normal daemon mode
+- `./claudeclaw-bin start --prompt "text"` — one-shot prompt, no daemon loop
+- `./claudeclaw-bin start --trigger` — start daemon and run startup trigger once
+- `./claudeclaw-bin start --prompt "text" --trigger` — start daemon and run startup trigger with custom prompt
 - Add `--telegram` with `--trigger` to forward startup trigger output to configured Telegram users
 - Add `--web` (optional `--web-port 4632`) to start a local dashboard with the daemon
 
 **Send command options (CLI):**
-- `bun run src/index.ts send "text"` — send to active daemon session
-- `bun run src/index.ts send "text" --telegram` — send and forward output to Telegram
+- `./claudeclaw-bin send "text"` — send to active daemon session
+- `./claudeclaw-bin send "text" --telegram` — send and forward output to Telegram
 - If daemon is already running, use `send`; `start` will abort.
 
 **How it works:**
@@ -51,7 +51,7 @@ Your prompt here. Claude will run this at the scheduled time.
 
 Schedule uses standard cron syntax: `minute hour day-of-month month day-of-week`
 
-**Note:** Bun is required to run the daemon. It will be auto-installed on first `/heartbeat:start` if missing.
+**Note:** The Go binary `claudeclaw-bin` must be built first with `go build -o claudeclaw-bin ./cmd/claudeclaw`.
 
 **Telegram:**
 - Configure in `.claude/claudeclaw/settings.json` under `telegram`
