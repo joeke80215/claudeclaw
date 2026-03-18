@@ -44,7 +44,7 @@ type HeartbeatConfig struct {
 // TelegramConfig holds Telegram bot configuration.
 type TelegramConfig struct {
 	Token          string `json:"token"`
-	AllowedUserIds []int  `json:"allowedUserIds"`
+	AllowedUserIds []int64 `json:"allowedUserIds"`
 }
 
 // DiscordConfig holds Discord bot configuration.
@@ -146,7 +146,7 @@ func defaultSettings() *Settings {
 			ExcludeWindows:    []HeartbeatExcludeWindow{},
 			ForwardToTelegram: true,
 		},
-		Telegram: TelegramConfig{Token: "", AllowedUserIds: []int{}},
+		Telegram: TelegramConfig{Token: "", AllowedUserIds: []int64{}},
 		Discord:  DiscordConfig{Token: "", AllowedUserIds: []string{}, ListenChannels: []string{}},
 		Security: SecurityConfig{Level: SecurityModerate, AllowedTools: []string{}, DisallowedTools: []string{}},
 		Web:      WebConfig{Enabled: false, Host: "127.0.0.1", Port: 4632},
@@ -315,10 +315,10 @@ func parseSettings(raw map[string]interface{}, discordUserIds []string) *Setting
 			s.Telegram.Token = v
 		}
 		if v, ok := tg["allowedUserIds"].([]interface{}); ok {
-			ids := make([]int, 0, len(v))
+			ids := make([]int64, 0, len(v))
 			for _, item := range v {
 				if n, ok := item.(float64); ok {
-					ids = append(ids, int(n))
+					ids = append(ids, int64(n))
 				}
 			}
 			s.Telegram.AllowedUserIds = ids

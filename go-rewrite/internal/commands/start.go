@@ -491,15 +491,15 @@ func Start(args []string) {
 
 	// --- Telegram init ---
 	telegramToken := ""
-	type telegramSendFunc func(chatID int, text string) error
+	type telegramSendFunc func(chatID int64, text string) error
 	var telegramSend telegramSendFunc
 
 	initTelegram := func(token string) {
 		if token != "" && token != telegramToken {
-			telegram.StartPolling(debugFlag)
+			telegram.StartPolling(ctx, debugFlag)
 			telegramToken = token
-			telegramSend = func(chatID int, text string) error {
-				return telegram.SendMessage(token, chatID, text, nil)
+			telegramSend = func(chatID int64, text string) error {
+				return telegram.SendMessage(token, chatID, text)
 			}
 			fmt.Printf("[%s] Telegram: enabled\n", ts())
 		} else if token == "" && telegramToken != "" {
@@ -576,7 +576,7 @@ func Start(args []string) {
 			}
 		}
 		for _, userID := range currentSettings.Telegram.AllowedUserIds {
-			if err := telegramSend(userID, text); err != nil {
+			if err := telegramSend(int64(userID), text); err != nil {
 				fmt.Fprintf(os.Stderr, "[Telegram] Failed to forward to %d: %v\n", userID, err)
 			}
 		}
@@ -818,9 +818,9 @@ func Start(args []string) {
 				}
 				if patch.ExcludeWindows != nil {
 					prevJSON, _ := json.Marshal(currentSettings.Heartbeat.ExcludeWindows)
-					nextJSON, _ := json.Marshal(*patch.ExcludeWindows)
+					nextJSON, _ := json.Marshal(patch.ExcludeWindows)
 					if string(prevJSON) != string(nextJSON) {
-						currentSettings.Heartbeat.ExcludeWindows = *patch.ExcludeWindows
+						currentSettings.Heartbeat.ExcludeWindows = patch.ExcludeWindows
 						changed = true
 					}
 				}
@@ -1062,7 +1062,7 @@ func startWebWithFallback(
 	onHbEnabled func(bool),
 	onHbSettings func(web.HeartbeatPatch),
 	onJobsChanged func(),
-) (*web.ServerHandle, error) {
+) (*web.Handle, error) {
 	maxAttempts := 10
 	var lastErr error
 	for i := 0; i < maxAttempts; i++ {

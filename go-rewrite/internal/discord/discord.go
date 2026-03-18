@@ -699,7 +699,7 @@ func (g *Gateway) handleMessageCreate(ctx context.Context, token string, msg *di
 	}
 
 	prefixedPrompt := strings.Join(promptParts, "\n")
-	result, err := runner.RunUserMessage("discord", prefixedPrompt)
+	result, err := runner.RunUserMessage(context.Background(), "discord", prefixedPrompt)
 
 	// Cancel typing before sending response.
 	typingCancel()
@@ -854,7 +854,7 @@ func (g *Gateway) handleGuildCreate(token string, guild *discordGuild) {
 		guild.Name, guild.ID,
 	)
 
-	result, err := runner.Run("discord", eventPrompt)
+	result, err := runner.Run(context.Background(), "discord", eventPrompt)
 	if err != nil || result.ExitCode != 0 {
 		_ = SendMessage(cfg.Token, channelID, "I was added to this server. Mention me to start.", nil)
 		return

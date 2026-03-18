@@ -6,5 +6,5 @@ import (
 
 // Telegram runs the Telegram bot as a standalone process.
 func Telegram() {
-	telegram.Standalone()
+	telegram.Telegram()
 }
