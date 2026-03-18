@@ -1235,7 +1235,7 @@ func registerBotCommands(token string) {
 		commands = commands[:100]
 	}
 
-	_, err = callAPI[json.RawMessage](token, "setMyCommands", map[string]interface{}{
+	_, err := callAPI[json.RawMessage](token, "setMyCommands", map[string]interface{}{
 		"commands": commands,
 	})
 	if err != nil {
