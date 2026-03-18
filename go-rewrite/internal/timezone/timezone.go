@@ -93,8 +93,11 @@ func getCurrentOffsetMinutesForIANA(tz string) (int, bool) {
 	if err != nil {
 		return 0, false
 	}
-	_, offset := time.Now().In(loc).Zone()
-	return ClampTimezoneOffsetMinutes(offset / 60), true
+	// Zone() returns offset in seconds east of UTC.
+	// We divide by 60 to get minutes; integer division is fine since
+	// real-world timezone offsets are always whole minutes.
+	_, offsetSec := time.Now().In(loc).Zone()
+	return ClampTimezoneOffsetMinutes(offsetSec / 60), true
 }
 
 // ResolveTimezoneOffsetMinutes resolves a timezone offset from a value that may be

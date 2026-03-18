@@ -97,7 +97,7 @@ type Settings struct {
 }
 
 var (
-	mu     sync.Mutex
+	mu     sync.RWMutex
 	cached *Settings
 )
 
@@ -434,8 +434,8 @@ func loadFromDisk() (*Settings, error) {
 
 // GetSettings returns the cached settings. Panics if settings have not been loaded.
 func GetSettings() *Settings {
-	mu.Lock()
-	defer mu.Unlock()
+	mu.RLock()
+	defer mu.RUnlock()
 	if cached == nil {
 		panic("config: settings not loaded — call LoadSettings() first")
 	}
