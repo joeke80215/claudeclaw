@@ -282,28 +282,61 @@ notify: true
 | POST | `/api/jobs` | 建立排程任務 |
 | DELETE | `/api/jobs/<name>` | 刪除排程任務 |
 
-## Go 重寫
+## 使用 Go 版本
 
-Go 重寫版本位於 `go-rewrite/`，目標是提供更好的效能與更簡便的部署方式。
+Go 重寫版本位於 `go-rewrite/`，產生單一二進位檔，無需 Bun 或 Node 等執行環境。
+
+### 編譯
 
 ```bash
 cd go-rewrite
-
-# 編譯
 go build -o claudeclaw ./cmd/claudeclaw
-
-# 執行
-./claudeclaw start
-./claudeclaw status
-./claudeclaw telegram
-./claudeclaw discord
-./claudeclaw send "你的指令"
 ```
 
-**與 TypeScript 版本的差異：**
-- 單一編譯二進位檔（約 11 MB），無需 Bun 執行環境
-- 最少外部依賴（僅 `nhooyr.io/websocket` 用於 Discord Gateway，`github.com/go-telegram/bot` 用於 Telegram）
-- 更佳的跨平台部署體驗
+### 獨立執行
+
+Go 二進位檔與 TypeScript CLI 指令完全對應：
+
+```bash
+./claudeclaw start              # 啟動常駐程式（互動式設定精靈）
+./claudeclaw start --web        # 附帶 Web 儀表板啟動
+./claudeclaw status             # 查看常駐程式狀態
+./claudeclaw send "你的指令"     # 發送單次提示詞
+./claudeclaw telegram           # 啟動 Telegram 機器人
+./claudeclaw discord            # 啟動 Discord 機器人
+./claudeclaw --stop             # 停止常駐程式
+./claudeclaw --clear            # 備份並重設工作階段
+```
+
+### 在 Claude Code 中使用（類似 `/claudeclaw:start`）
+
+若要以 Go 二進位檔作為 Claude Code 斜線指令的後端，將啟動步驟中的 Bun 呼叫替換為 Go 二進位檔路徑即可：
+
+1. **編譯二進位檔**，放置於專案可存取的位置（如專案根目錄或 `go-rewrite/`）：
+   ```bash
+   cd go-rewrite && go build -o claudeclaw ./cmd/claudeclaw
+   ```
+
+2. **從專案目錄啟動常駐程式**：
+   ```bash
+   nohup ./go-rewrite/claudeclaw start --web > .claude/claudeclaw/logs/daemon.log 2>&1 &
+   ```
+
+3. **在 Claude Code 中恢復共享工作階段**：
+   ```bash
+   claude --resume $(cat .claude/claudeclaw/session.json | grep -o '"sessionId":"[^"]*"' | cut -d'"' -f4)
+   ```
+
+所有斜線指令（`/claudeclaw:status`、`/claudeclaw:stop` 等）運作方式不變——它們讀取相同的 `.claude/claudeclaw/` 狀態目錄。Go 二進位檔與 TypeScript 版本共用完全相同的設定與狀態格式，因此你可以隨時自由切換。
+
+### 為什麼選擇 Go？
+
+| | TypeScript (Bun) | Go |
+| --- | --- | --- |
+| 依賴 | 需要 Bun + Node | 單一約 11 MB 二進位檔 |
+| 部署 | 先安裝 Bun | 複製二進位檔即可執行 |
+| 效能 | V8 執行環境開銷 | 原生執行 |
+| 交叉編譯 | 不適用 | `GOOS=linux GOARCH=arm64 go build` |
 
 ## 截圖
 
