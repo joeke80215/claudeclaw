@@ -1,4 +1,4 @@
-// Package telegram implements a polling-based Telegram bot using raw HTTP calls.
+// Package telegram implements a Telegram bot using github.com/go-telegram/bot.
 package telegram
 
 import (
@@ -18,6 +18,9 @@ import (
 	"syscall"
 	"time"
 
+	tgbot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
+
 	"github.com/claudeclaw/claudeclaw/internal/config"
 	"github.com/claudeclaw/claudeclaw/internal/runner"
 	"github.com/claudeclaw/claudeclaw/internal/sessions"
@@ -29,153 +32,20 @@ import (
 // Constants
 // ---------------------------------------------------------------------------
 
-const (
-	apiBase     = "https://api.telegram.org/bot"
-	fileAPIBase = "https://api.telegram.org/file/bot"
-	maxMsgLen   = 4096
-)
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-// TelegramUser represents a Telegram user.
-type TelegramUser struct {
-	ID        int64  `json:"id"`
-	FirstName string `json:"first_name"`
-	Username  string `json:"username,omitempty"`
-}
-
-// TelegramChat represents a Telegram chat.
-type TelegramChat struct {
-	ID    int64  `json:"id"`
-	Type  string `json:"type"`
-	Title string `json:"title,omitempty"`
-}
-
-// TelegramPhoto represents a photo size in Telegram.
-type TelegramPhoto struct {
-	FileID   string `json:"file_id"`
-	Width    int    `json:"width"`
-	Height   int    `json:"height"`
-	FileSize *int   `json:"file_size,omitempty"`
-}
-
-// TelegramDocument represents a file attachment.
-type TelegramDocument struct {
-	FileID   string `json:"file_id"`
-	FileName string `json:"file_name,omitempty"`
-	MimeType string `json:"mime_type,omitempty"`
-	FileSize *int   `json:"file_size,omitempty"`
-}
-
-// TelegramVoice represents a voice message.
-type TelegramVoice struct {
-	FileID   string `json:"file_id"`
-	MimeType string `json:"mime_type,omitempty"`
-	Duration int    `json:"duration,omitempty"`
-	FileSize *int   `json:"file_size,omitempty"`
-}
-
-// TelegramAudio represents an audio file.
-type TelegramAudio struct {
-	FileID   string `json:"file_id"`
-	MimeType string `json:"mime_type,omitempty"`
-	Duration int    `json:"duration,omitempty"`
-	FileName string `json:"file_name,omitempty"`
-	FileSize *int   `json:"file_size,omitempty"`
-}
-
-// TelegramEntity represents a message entity (mention, command, etc).
-type TelegramEntity struct {
-	Type   string `json:"type"`
-	Offset int    `json:"offset"`
-	Length int    `json:"length"`
-}
-
-// TelegramMessage represents an incoming message.
-type TelegramMessage struct {
-	MessageID       int               `json:"message_id"`
-	From            *TelegramUser     `json:"from,omitempty"`
-	Chat            TelegramChat      `json:"chat"`
-	MessageThreadID *int64            `json:"message_thread_id,omitempty"`
-	Text            string            `json:"text,omitempty"`
-	Caption         string            `json:"caption,omitempty"`
-	Photo           []TelegramPhoto   `json:"photo,omitempty"`
-	Document        *TelegramDocument `json:"document,omitempty"`
-	Voice           *TelegramVoice    `json:"voice,omitempty"`
-	Audio           *TelegramAudio    `json:"audio,omitempty"`
-	Entities        []TelegramEntity  `json:"entities,omitempty"`
-	CaptionEntities []TelegramEntity  `json:"caption_entities,omitempty"`
-	ReplyToMessage  *TelegramMessage  `json:"reply_to_message,omitempty"`
-}
-
-// TelegramChatMember represents a chat member.
-type TelegramChatMember struct {
-	User   TelegramUser `json:"user"`
-	Status string       `json:"status"`
-}
-
-// TelegramMyChatMemberUpdate represents a my_chat_member update.
-type TelegramMyChatMemberUpdate struct {
-	Chat          TelegramChat       `json:"chat"`
-	From          TelegramUser       `json:"from"`
-	OldChatMember TelegramChatMember `json:"old_chat_member"`
-	NewChatMember TelegramChatMember `json:"new_chat_member"`
-}
-
-// TelegramCallbackQuery represents a callback query from an inline keyboard.
-type TelegramCallbackQuery struct {
-	ID      string           `json:"id"`
-	From    TelegramUser     `json:"from"`
-	Message *TelegramMessage `json:"message,omitempty"`
-	Data    string           `json:"data,omitempty"`
-}
-
-// TelegramUpdate represents an incoming update from Telegram.
-type TelegramUpdate struct {
-	UpdateID          int                         `json:"update_id"`
-	Message           *TelegramMessage            `json:"message,omitempty"`
-	EditedMessage     *TelegramMessage            `json:"edited_message,omitempty"`
-	ChannelPost       *TelegramMessage            `json:"channel_post,omitempty"`
-	EditedChannelPost *TelegramMessage            `json:"edited_channel_post,omitempty"`
-	MyChatMember      *TelegramMyChatMemberUpdate `json:"my_chat_member,omitempty"`
-	CallbackQuery     *TelegramCallbackQuery      `json:"callback_query,omitempty"`
-}
-
-// TelegramMe represents the result of getMe.
-type TelegramMe struct {
-	ID                      int64  `json:"id"`
-	Username                string `json:"username,omitempty"`
-	CanReadAllGroupMessages bool   `json:"can_read_all_group_messages,omitempty"`
-}
-
-// TelegramFile represents a file returned by getFile.
-type TelegramFile struct {
-	FilePath string `json:"file_path,omitempty"`
-}
-
-// telegramAPIResponse is the generic wrapper for Telegram Bot API responses.
-type telegramAPIResponse[T any] struct {
-	OK     bool `json:"ok"`
-	Result T    `json:"result"`
-}
-
-// botCommand represents a bot command for setMyCommands.
-type botCommand struct {
-	Command     string `json:"command"`
-	Description string `json:"description"`
-}
+const maxMsgLen = 4096
 
 // ---------------------------------------------------------------------------
 // Module state
 // ---------------------------------------------------------------------------
 
 var (
-	debugMode   bool
-	botUsername  string
-	botID       int64
-	mu          sync.Mutex // guards botUsername and botID
+	debugMode  bool
+	botUsername string
+	botIDVal   int64
+	mu         sync.Mutex // guards botUsername and botIDVal
+
+	// botInstance holds the *tgbot.Bot so SendMessage (exported) can use it.
+	botInstance *tgbot.Bot
 )
 
 func debugLog(format string, args ...interface{}) {
@@ -186,65 +56,16 @@ func debugLog(format string, args ...interface{}) {
 }
 
 // ---------------------------------------------------------------------------
-// Generic API caller
-// ---------------------------------------------------------------------------
-
-func callAPI[T any](token, method string, body interface{}) (T, error) {
-	var zero T
-	url := fmt.Sprintf("%s%s/%s", apiBase, token, method)
-
-	var reqBody io.Reader
-	if body != nil {
-		data, err := json.Marshal(body)
-		if err != nil {
-			return zero, fmt.Errorf("marshal body for %s: %w", method, err)
-		}
-		reqBody = bytes.NewReader(data)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, url, reqBody)
-	if err != nil {
-		return zero, fmt.Errorf("create request for %s: %w", method, err)
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return zero, fmt.Errorf("telegram API %s: %w", method, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return zero, fmt.Errorf("telegram API %s: %d %s: %s", method, resp.StatusCode, resp.Status, string(respBody))
-	}
-
-	var result telegramAPIResponse[T]
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return zero, fmt.Errorf("decode response for %s: %w", method, err)
-	}
-	if !result.OK {
-		return zero, fmt.Errorf("telegram API %s: ok=false", method)
-	}
-	return result.Result, nil
-}
-
-// ---------------------------------------------------------------------------
 // Text helpers
 // ---------------------------------------------------------------------------
 
 var unicodeDashRe = regexp.MustCompile(`[\x{2010}-\x{2015}\x{2212}]`)
 
-// normalizeTelegramText replaces Unicode dashes with ASCII dashes.
 func normalizeTelegramText(text string) string {
 	return unicodeDashRe.ReplaceAllString(text, "-")
 }
 
-// getMessageTextAndEntities returns the effective text and entities for a message,
-// preferring text over caption.
-func getMessageTextAndEntities(msg *TelegramMessage) (string, []TelegramEntity) {
+func getMessageTextAndEntities(msg *models.Message) (string, []models.MessageEntity) {
 	if msg.Text != "" {
 		return normalizeTelegramText(msg.Text), msg.Entities
 	}
@@ -254,18 +75,15 @@ func getMessageTextAndEntities(msg *TelegramMessage) (string, []TelegramEntity) 
 	return "", nil
 }
 
-// isImageDocument returns true if the document has an image MIME type.
-func isImageDocument(doc *TelegramDocument) bool {
+func isImageDocument(doc *models.Document) bool {
 	return doc != nil && strings.HasPrefix(doc.MimeType, "image/")
 }
 
-// isAudioDocument returns true if the document has an audio MIME type.
-func isAudioDocument(doc *TelegramDocument) bool {
+func isAudioDocument(doc *models.Document) bool {
 	return doc != nil && strings.HasPrefix(doc.MimeType, "audio/")
 }
 
-// pickLargestPhoto returns the largest photo from a slice, by file_size or pixel area.
-func pickLargestPhoto(photos []TelegramPhoto) TelegramPhoto {
+func pickLargestPhoto(photos []models.PhotoSize) models.PhotoSize {
 	best := photos[0]
 	bestSize := photoSize(best)
 	for _, p := range photos[1:] {
@@ -278,14 +96,13 @@ func pickLargestPhoto(photos []TelegramPhoto) TelegramPhoto {
 	return best
 }
 
-func photoSize(p TelegramPhoto) int {
-	if p.FileSize != nil {
-		return *p.FileSize
+func photoSize(p models.PhotoSize) int {
+	if p.FileSize > 0 {
+		return p.FileSize
 	}
 	return p.Width * p.Height
 }
 
-// extensionFromMimeType returns a file extension for common image MIME types.
 func extensionFromMimeType(mime string) string {
 	switch mime {
 	case "image/jpeg":
@@ -303,7 +120,6 @@ func extensionFromMimeType(mime string) string {
 	}
 }
 
-// extensionFromAudioMimeType returns a file extension for common audio MIME types.
 func extensionFromAudioMimeType(mime string) string {
 	switch mime {
 	case "audio/mpeg":
@@ -321,8 +137,6 @@ func extensionFromAudioMimeType(mime string) string {
 	}
 }
 
-// extractTelegramCommand extracts a /command from the beginning of text.
-// Returns empty string if text doesn't start with /.
 func extractTelegramCommand(text string) string {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
@@ -332,7 +146,6 @@ func extractTelegramCommand(text string) string {
 	if !strings.HasPrefix(firstToken, "/") {
 		return ""
 	}
-	// Strip @botname suffix from /command@botname
 	cmd := strings.SplitN(firstToken, "@", 2)[0]
 	return strings.ToLower(cmd)
 }
@@ -341,8 +154,6 @@ var reactRe = regexp.MustCompile(`(?i)\[react:([^\]\r\n]+)\]`)
 var trailingSpaceRe = regexp.MustCompile(`[ \t]+\n`)
 var multiBlankRe = regexp.MustCompile(`\n{3,}`)
 
-// extractReactionDirective parses [react:emoji] tags from text, returning
-// the cleaned text and the first reaction emoji found.
 func extractReactionDirective(text string) (cleanedText, reactionEmoji string) {
 	var emoji string
 	cleaned := reactRe.ReplaceAllStringFunc(text, func(match string) string {
@@ -355,14 +166,12 @@ func extractReactionDirective(text string) (cleanedText, reactionEmoji string) {
 		}
 		return ""
 	})
-	// Clean up trailing whitespace on lines and collapse excess blank lines
 	cleaned = trailingSpaceRe.ReplaceAllString(cleaned, "\n")
 	cleaned = multiBlankRe.ReplaceAllString(cleaned, "\n\n")
 	cleaned = strings.TrimSpace(cleaned)
 	return cleaned, emoji
 }
 
-// firstNonEmpty returns the first non-empty string from the arguments.
 func firstNonEmpty(vals ...string) string {
 	for _, v := range vals {
 		if v != "" {
@@ -372,7 +181,6 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-// truncate truncates a string to maxLen runes, appending "..." if truncated.
 func truncate(s string, maxLen int) string {
 	runes := []rune(s)
 	if len(runes) <= maxLen {
@@ -385,13 +193,11 @@ func truncate(s string, maxLen int) string {
 // Markdown -> Telegram HTML conversion
 // ---------------------------------------------------------------------------
 
-// markdownToTelegramHTML converts markdown text to Telegram-compatible HTML.
 func markdownToTelegramHTML(text string) string {
 	if text == "" {
 		return ""
 	}
 
-	// 1. Extract and protect code blocks
 	var codeBlocks []string
 	codeBlockRe := regexp.MustCompile("(?s)```\\w*\n?(.*?)```")
 	text = codeBlockRe.ReplaceAllStringFunc(text, func(match string) string {
@@ -405,7 +211,6 @@ func markdownToTelegramHTML(text string) string {
 		return fmt.Sprintf("\x00CB%d\x00", idx)
 	})
 
-	// 2. Extract and protect inline code
 	var inlineCodes []string
 	inlineCodeRe := regexp.MustCompile("`([^`]+)`")
 	text = inlineCodeRe.ReplaceAllStringFunc(text, func(match string) string {
@@ -419,30 +224,24 @@ func markdownToTelegramHTML(text string) string {
 		return fmt.Sprintf("\x00IC%d\x00", idx)
 	})
 
-	// 3. Strip markdown headers
 	headerRe := regexp.MustCompile(`(?m)^#{1,6}\s+(.+)$`)
 	text = headerRe.ReplaceAllString(text, "$1")
 
-	// 4. Strip blockquotes
 	blockquoteRe := regexp.MustCompile(`(?m)^>\s*(.*)$`)
 	text = blockquoteRe.ReplaceAllString(text, "$1")
 
-	// 5. Escape HTML special characters
 	text = strings.ReplaceAll(text, "&", "&amp;")
 	text = strings.ReplaceAll(text, "<", "&lt;")
 	text = strings.ReplaceAll(text, ">", "&gt;")
 
-	// 6. Links [text](url) - before bold/italic to handle nested cases
 	linkRe := regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
 	text = linkRe.ReplaceAllString(text, `<a href="$2">$1</a>`)
 
-	// 7. Bold **text** or __text__
 	boldStarRe := regexp.MustCompile(`\*\*(.+?)\*\*`)
 	text = boldStarRe.ReplaceAllString(text, "<b>$1</b>")
 	boldUnderRe := regexp.MustCompile(`__(.+?)__`)
 	text = boldUnderRe.ReplaceAllString(text, "<b>$1</b>")
 
-	// 8. Italic _text_ (avoid matching inside words like some_var_name)
 	italicRe := regexp.MustCompile(`(?:^|[^a-zA-Z0-9])_([^_]+)_(?:[^a-zA-Z0-9]|$)`)
 	text = italicRe.ReplaceAllStringFunc(text, func(match string) string {
 		sub := italicRe.FindStringSubmatch(match)
@@ -464,15 +263,12 @@ func markdownToTelegramHTML(text string) string {
 		return prefix + "<i>" + inner + "</i>" + suffix
 	})
 
-	// 9. Strikethrough ~~text~~
 	strikeRe := regexp.MustCompile(`~~(.+?)~~`)
 	text = strikeRe.ReplaceAllString(text, "<s>$1</s>")
 
-	// 10. Bullet lists
 	bulletRe := regexp.MustCompile(`(?m)^[-*]\s+`)
 	text = bulletRe.ReplaceAllString(text, "\u2022 ")
 
-	// 11. Restore inline code with HTML tags
 	for i, code := range inlineCodes {
 		escaped := strings.ReplaceAll(code, "&", "&amp;")
 		escaped = strings.ReplaceAll(escaped, "<", "&lt;")
@@ -480,7 +276,6 @@ func markdownToTelegramHTML(text string) string {
 		text = strings.Replace(text, fmt.Sprintf("\x00IC%d\x00", i), "<code>"+escaped+"</code>", 1)
 	}
 
-	// 12. Restore code blocks with HTML tags
 	for i, code := range codeBlocks {
 		escaped := strings.ReplaceAll(code, "&", "&amp;")
 		escaped = strings.ReplaceAll(escaped, "<", "&lt;")
@@ -492,36 +287,36 @@ func markdownToTelegramHTML(text string) string {
 }
 
 // ---------------------------------------------------------------------------
-// Typing indicator (goroutine + ticker + context cancellation)
+// Typing indicator
 // ---------------------------------------------------------------------------
 
-func startTypingIndicator(ctx context.Context, token string, chatID int64, threadID *int64) context.CancelFunc {
+func startTypingIndicator(ctx context.Context, b *tgbot.Bot, chatID int64, threadID int) context.CancelFunc {
 	typingCtx, typingCancel := context.WithCancel(ctx)
 	go func() {
 		ticker := time.NewTicker(4 * time.Second)
 		defer ticker.Stop()
-		sendTyping(token, chatID, threadID) // immediate first send
+		sendTyping(typingCtx, b, chatID, threadID)
 		for {
 			select {
 			case <-typingCtx.Done():
 				return
 			case <-ticker.C:
-				sendTyping(token, chatID, threadID)
+				sendTyping(typingCtx, b, chatID, threadID)
 			}
 		}
 	}()
 	return typingCancel
 }
 
-func sendTyping(token string, chatID int64, threadID *int64) {
-	body := map[string]interface{}{
-		"chat_id": chatID,
-		"action":  "typing",
+func sendTyping(ctx context.Context, b *tgbot.Bot, chatID int64, threadID int) {
+	params := &tgbot.SendChatActionParams{
+		ChatID: chatID,
+		Action: models.ChatActionTyping,
 	}
-	if threadID != nil {
-		body["message_thread_id"] = *threadID
+	if threadID != 0 {
+		params.MessageThreadID = threadID
 	}
-	_, _ = callAPI[json.RawMessage](token, "sendChatAction", body)
+	_, _ = b.SendChatAction(ctx, params)
 }
 
 // ---------------------------------------------------------------------------
@@ -529,12 +324,16 @@ func sendTyping(token string, chatID int64, threadID *int64) {
 // ---------------------------------------------------------------------------
 
 // SendMessage sends a message to a specific chat. Exported for heartbeat forwarding.
-func SendMessage(token string, chatID int64, text string) error {
-	return sendMessageInternal(token, chatID, text, nil)
+// The token parameter is accepted for API compatibility but ignored; the module-level
+// bot instance is used instead.
+func SendMessage(_ string, chatID int64, text string) error {
+	if botInstance == nil {
+		return fmt.Errorf("telegram bot not initialized")
+	}
+	return sendMessageInternal(context.Background(), botInstance, chatID, text, 0)
 }
 
-// sendMessageInternal sends a message with optional thread ID, splitting at 4096 chars.
-func sendMessageInternal(token string, chatID int64, text string, threadID *int64) error {
+func sendMessageInternal(ctx context.Context, b *tgbot.Bot, chatID int64, text string, threadID int) error {
 	normalized := normalizeTelegramText(text)
 	normalized = reactRe.ReplaceAllString(normalized, "")
 	html := markdownToTelegramHTML(normalized)
@@ -550,16 +349,16 @@ func sendMessageInternal(token string, chatID int64, text string, threadID *int6
 		}
 		chunk := html[i:end]
 
-		body := map[string]interface{}{
-			"chat_id":    chatID,
-			"text":       chunk,
-			"parse_mode": "HTML",
+		params := &tgbot.SendMessageParams{
+			ChatID:    chatID,
+			Text:      chunk,
+			ParseMode: models.ParseModeHTML,
 		}
-		if threadID != nil {
-			body["message_thread_id"] = *threadID
+		if threadID != 0 {
+			params.MessageThreadID = threadID
 		}
 
-		_, err := callAPI[json.RawMessage](token, "sendMessage", body)
+		_, err := b.SendMessage(ctx, params)
 		if err != nil {
 			// Fallback to plain text if HTML parsing fails
 			plainStart := i
@@ -571,14 +370,14 @@ func sendMessageInternal(token string, chatID int64, text string, threadID *int6
 				plainEnd = len(normalized)
 			}
 			plainChunk := normalized[plainStart:plainEnd]
-			plainBody := map[string]interface{}{
-				"chat_id": chatID,
-				"text":    plainChunk,
+			plainParams := &tgbot.SendMessageParams{
+				ChatID: chatID,
+				Text:   plainChunk,
 			}
-			if threadID != nil {
-				plainBody["message_thread_id"] = *threadID
+			if threadID != 0 {
+				plainParams.MessageThreadID = threadID
 			}
-			if _, err2 := callAPI[json.RawMessage](token, "sendMessage", plainBody); err2 != nil {
+			if _, err2 := b.SendMessage(ctx, plainParams); err2 != nil {
 				return fmt.Errorf("sendMessage fallback failed: %w", err2)
 			}
 		}
@@ -586,14 +385,17 @@ func sendMessageInternal(token string, chatID int64, text string, threadID *int6
 	return nil
 }
 
-// sendReaction sends a reaction emoji to a message.
-func sendReaction(token string, chatID int64, messageID int, emoji string) error {
-	body := map[string]interface{}{
-		"chat_id":    chatID,
-		"message_id": messageID,
-		"reaction":   []map[string]string{{"type": "emoji", "emoji": emoji}},
-	}
-	_, err := callAPI[json.RawMessage](token, "setMessageReaction", body)
+func sendReaction(ctx context.Context, b *tgbot.Bot, chatID int64, messageID int, emoji string) error {
+	_, err := b.SetMessageReaction(ctx, &tgbot.SetMessageReactionParams{
+		ChatID:    chatID,
+		MessageID: messageID,
+		Reaction: []models.ReactionType{
+			{
+				Type:              models.ReactionTypeTypeEmoji,
+				ReactionTypeEmoji: &models.ReactionTypeEmoji{Emoji: emoji},
+			},
+		},
+	})
 	return err
 }
 
@@ -601,11 +403,9 @@ func sendReaction(token string, chatID int64, messageID int, emoji string) error
 // Group trigger detection
 // ---------------------------------------------------------------------------
 
-// groupTriggerReason determines why the bot should respond to a group message.
-// Returns empty string if the bot should not respond.
-func groupTriggerReason(msg *TelegramMessage) string {
+func groupTriggerReason(msg *models.Message) string {
 	mu.Lock()
-	currentBotID := botID
+	currentBotID := botIDVal
 	currentBotUsername := botUsername
 	mu.Unlock()
 
@@ -630,13 +430,13 @@ func groupTriggerReason(msg *TelegramMessage) string {
 		}
 		value := string(runes[entity.Offset : entity.Offset+entity.Length])
 
-		if entity.Type == "mention" && currentBotUsername != "" && strings.EqualFold(value, "@"+currentBotUsername) {
+		if string(entity.Type) == "mention" && currentBotUsername != "" && strings.EqualFold(value, "@"+currentBotUsername) {
 			return "mention_entity_matches_bot"
 		}
-		if entity.Type == "mention" && currentBotUsername == "" {
+		if string(entity.Type) == "mention" && currentBotUsername == "" {
 			return "mention_entity_before_botname_loaded"
 		}
-		if entity.Type == "bot_command" {
+		if string(entity.Type) == "bot_command" {
 			if !strings.Contains(value, "@") {
 				return "bare_bot_command"
 			}
@@ -656,14 +456,12 @@ func groupTriggerReason(msg *TelegramMessage) string {
 // File downloads
 // ---------------------------------------------------------------------------
 
-// inboxDir returns the Telegram inbox directory path.
 func inboxDir() string {
 	cwd, _ := os.Getwd()
 	return filepath.Join(cwd, ".claude", "claudeclaw", "inbox", "telegram")
 }
 
-// downloadFile fetches a URL and returns the response body.
-func downloadFile(url string) ([]byte, error) {
+func downloadFileByURL(url string) ([]byte, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("download file: %w", err)
@@ -679,8 +477,7 @@ func downloadFile(url string) ([]byte, error) {
 	return data, nil
 }
 
-// downloadImageFromMessage downloads an image attachment and returns its local path.
-func downloadImageFromMessage(token string, msg *TelegramMessage) (string, error) {
+func downloadImageFromMessage(ctx context.Context, b *tgbot.Bot, msg *models.Message) (string, error) {
 	var fileID string
 	var docName, docMime string
 
@@ -697,7 +494,7 @@ func downloadImageFromMessage(token string, msg *TelegramMessage) (string, error
 		return "", fmt.Errorf("no image found in message")
 	}
 
-	fileMeta, err := callAPI[TelegramFile](token, "getFile", map[string]string{"file_id": fileID})
+	fileMeta, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: fileID})
 	if err != nil {
 		return "", fmt.Errorf("getFile: %w", err)
 	}
@@ -705,8 +502,8 @@ func downloadImageFromMessage(token string, msg *TelegramMessage) (string, error
 		return "", fmt.Errorf("getFile returned empty file_path")
 	}
 
-	downloadURL := fmt.Sprintf("%s%s/%s", fileAPIBase, token, fileMeta.FilePath)
-	data, err := downloadFile(downloadURL)
+	downloadURL := b.FileDownloadLink(fileMeta)
+	data, err := downloadFileByURL(downloadURL)
 	if err != nil {
 		return "", err
 	}
@@ -721,7 +518,7 @@ func downloadImageFromMessage(token string, msg *TelegramMessage) (string, error
 	mimeExt := extensionFromMimeType(docMime)
 	ext := firstNonEmpty(remoteExt, docExt, mimeExt, ".jpg")
 
-	filename := fmt.Sprintf("%d-%d-%d%s", msg.Chat.ID, msg.MessageID, time.Now().UnixMilli(), ext)
+	filename := fmt.Sprintf("%d-%d-%d%s", msg.Chat.ID, msg.ID, time.Now().UnixMilli(), ext)
 	localPath := filepath.Join(dir, filename)
 	if err := os.WriteFile(localPath, data, 0o644); err != nil {
 		return "", fmt.Errorf("write image file: %w", err)
@@ -729,8 +526,7 @@ func downloadImageFromMessage(token string, msg *TelegramMessage) (string, error
 	return localPath, nil
 }
 
-// downloadVoiceFromMessage downloads a voice/audio attachment and returns its local path.
-func downloadVoiceFromMessage(token string, msg *TelegramMessage) (string, error) {
+func downloadVoiceFromMessage(ctx context.Context, b *tgbot.Bot, msg *models.Message) (string, error) {
 	var fileID string
 	var mime string
 	var audioDocName, audioFileName string
@@ -755,7 +551,7 @@ func downloadVoiceFromMessage(token string, msg *TelegramMessage) (string, error
 
 	debugLog("Voice download: fileId=%s mime=%s", fileID, mime)
 
-	fileMeta, err := callAPI[TelegramFile](token, "getFile", map[string]string{"file_id": fileID})
+	fileMeta, err := b.GetFile(ctx, &tgbot.GetFileParams{FileID: fileID})
 	if err != nil {
 		return "", fmt.Errorf("getFile: %w", err)
 	}
@@ -763,8 +559,8 @@ func downloadVoiceFromMessage(token string, msg *TelegramMessage) (string, error
 		return "", fmt.Errorf("getFile returned empty file_path")
 	}
 
-	downloadURL := fmt.Sprintf("%s%s/%s", fileAPIBase, token, fileMeta.FilePath)
-	data, err := downloadFile(downloadURL)
+	downloadURL := b.FileDownloadLink(fileMeta)
+	data, err := downloadFileByURL(downloadURL)
 	if err != nil {
 		return "", err
 	}
@@ -780,7 +576,7 @@ func downloadVoiceFromMessage(token string, msg *TelegramMessage) (string, error
 	mimeExt := extensionFromAudioMimeType(mime)
 	ext := firstNonEmpty(remoteExt, docExt, audioExt, mimeExt, ".ogg")
 
-	filename := fmt.Sprintf("%d-%d-%d%s", msg.Chat.ID, msg.MessageID, time.Now().UnixMilli(), ext)
+	filename := fmt.Sprintf("%d-%d-%d%s", msg.Chat.ID, msg.ID, time.Now().UnixMilli(), ext)
 	localPath := filepath.Join(dir, filename)
 	if err := os.WriteFile(localPath, data, 0o644); err != nil {
 		return "", fmt.Errorf("write voice file: %w", err)
@@ -794,9 +590,7 @@ func downloadVoiceFromMessage(token string, msg *TelegramMessage) (string, error
 // Secretary reply helper
 // ---------------------------------------------------------------------------
 
-// trySecretaryReply attempts to handle a reply as a secretary workflow custom reply.
-// Returns true if the reply was handled.
-func trySecretaryReply(token string, chatID int64, threadID *int64, replyMsgID int, text string) bool {
+func trySecretaryReply(ctx context.Context, b *tgbot.Bot, chatID int64, threadID int, replyMsgID int, text string) bool {
 	client := &http.Client{Timeout: 5 * time.Second}
 	lookupURL := fmt.Sprintf("http://127.0.0.1:9999/pending/by-bot-msg/%d", replyMsgID)
 	resp, err := client.Get(lookupURL)
@@ -824,7 +618,7 @@ func trySecretaryReply(token string, chatID int64, threadID *int64, replyMsgID i
 	}
 	confirmResp.Body.Close()
 
-	_ = sendMessageInternal(token, chatID, "Sent custom reply + pattern learned.", threadID)
+	_ = sendMessageInternal(ctx, b, chatID, "Sent custom reply + pattern learned.", threadID)
 	return true
 }
 
@@ -834,9 +628,7 @@ func trySecretaryReply(token string, chatID int64, threadID *int64, replyMsgID i
 
 var secretaryCallbackRe = regexp.MustCompile(`^sec_(yes|no)_([0-9a-f]{8})$`)
 
-func handleCallbackQuery(query *TelegramCallbackQuery) {
-	cfg := config.GetSettings()
-	token := cfg.Telegram.Token
+func handleCallbackQuery(ctx context.Context, b *tgbot.Bot, query *models.CallbackQuery) {
 	data := query.Data
 
 	// Secretary pattern: "sec_yes_<8hex>" or "sec_no_<8hex>"
@@ -866,61 +658,96 @@ func handleCallbackQuery(query *TelegramCallbackQuery) {
 				answerText = "Not found"
 			}
 
-			if query.Message != nil {
+			// Try to edit the original message
+			if query.Message.Type == models.MaybeInaccessibleMessageTypeMessage && query.Message.Message != nil {
+				origMsg := query.Message.Message
 				statusLine := "\n\nDismissed"
 				if action == "yes" {
 					statusLine = "\n\nSent"
 				}
-				oldText := query.Message.Text
+				oldText := origMsg.Text
 				replyRe := regexp.MustCompile(`(?s)\n\nReply:.*$`)
 				newText := replyRe.ReplaceAllString(oldText, statusLine)
 				if newText == oldText {
 					newText = oldText + statusLine
 				}
-				_, _ = callAPI[json.RawMessage](token, "editMessageText", map[string]interface{}{
-					"chat_id":    query.Message.Chat.ID,
-					"message_id": query.Message.MessageID,
-					"text":       newText,
+				_, _ = b.EditMessageText(ctx, &tgbot.EditMessageTextParams{
+					ChatID:    origMsg.Chat.ID,
+					MessageID: origMsg.ID,
+					Text:      newText,
 				})
 			}
 		}()
 
-		_, _ = callAPI[json.RawMessage](token, "answerCallbackQuery", map[string]interface{}{
-			"callback_query_id": query.ID,
-			"text":              answerText,
+		_, _ = b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
+			CallbackQueryID: query.ID,
+			Text:            answerText,
 		})
 		return
 	}
 
 	// Default: ack with no text
-	_, _ = callAPI[json.RawMessage](token, "answerCallbackQuery", map[string]interface{}{
-		"callback_query_id": query.ID,
+	_, _ = b.AnswerCallbackQuery(ctx, &tgbot.AnswerCallbackQueryParams{
+		CallbackQueryID: query.ID,
 	})
+}
+
+// ---------------------------------------------------------------------------
+// chatMemberUser extracts the User from a ChatMember discriminated union.
+// ---------------------------------------------------------------------------
+
+func chatMemberUser(cm models.ChatMember) *models.User {
+	switch cm.Type {
+	case models.ChatMemberTypeOwner:
+		if cm.Owner != nil {
+			return cm.Owner.User
+		}
+	case models.ChatMemberTypeAdministrator:
+		return &cm.Administrator.User
+	case models.ChatMemberTypeMember:
+		if cm.Member != nil {
+			return cm.Member.User
+		}
+	case models.ChatMemberTypeRestricted:
+		if cm.Restricted != nil {
+			return cm.Restricted.User
+		}
+	case models.ChatMemberTypeLeft:
+		if cm.Left != nil {
+			return cm.Left.User
+		}
+	case models.ChatMemberTypeBanned:
+		if cm.Banned != nil {
+			return cm.Banned.User
+		}
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
 // my_chat_member handler
 // ---------------------------------------------------------------------------
 
-func handleMyChatMember(ctx context.Context, update *TelegramMyChatMemberUpdate) {
-	cfg := config.GetSettings()
-	token := cfg.Telegram.Token
+func handleMyChatMember(ctx context.Context, b *tgbot.Bot, update *models.ChatMemberUpdated) {
 	chat := update.Chat
 
-	mu.Lock()
-	if botUsername == "" && update.NewChatMember.User.Username != "" {
-		botUsername = update.NewChatMember.User.Username
+	newUser := chatMemberUser(update.NewChatMember)
+	if newUser != nil {
+		mu.Lock()
+		if botUsername == "" && newUser.Username != "" {
+			botUsername = newUser.Username
+		}
+		if botIDVal == 0 {
+			botIDVal = newUser.ID
+		}
+		mu.Unlock()
 	}
-	if botID == 0 {
-		botID = update.NewChatMember.User.ID
-	}
-	mu.Unlock()
 
-	oldStatus := update.OldChatMember.Status
-	newStatus := update.NewChatMember.Status
-	isGroup := chat.Type == "group" || chat.Type == "supergroup"
-	wasOut := oldStatus == "left" || oldStatus == "kicked"
-	isIn := newStatus == "member" || newStatus == "administrator"
+	oldStatus := update.OldChatMember.Type
+	newStatus := update.NewChatMember.Type
+	isGroup := chat.Type == models.ChatTypeGroup || chat.Type == models.ChatTypeSupergroup
+	wasOut := oldStatus == models.ChatMemberTypeLeft || oldStatus == models.ChatMemberTypeBanned
+	isIn := newStatus == models.ChatMemberTypeMember || newStatus == models.ChatMemberTypeAdministrator
 
 	if !isGroup || !wasOut || !isIn {
 		return
@@ -930,7 +757,7 @@ func handleMyChatMember(ctx context.Context, update *TelegramMyChatMemberUpdate)
 	if chatName == "" {
 		chatName = fmt.Sprintf("%d", chat.ID)
 	}
-	log.Printf("[Telegram] Added to %s: %s (%d) by %d", chat.Type, chatName, chat.ID, update.From.ID)
+	log.Printf("[Telegram] Added to %s: %s (%d) by %d", string(chat.Type), chatName, chat.ID, update.From.ID)
 
 	addedBy := update.From.Username
 	if addedBy == "" {
@@ -939,12 +766,13 @@ func handleMyChatMember(ctx context.Context, update *TelegramMyChatMemberUpdate)
 
 	eventPrompt := fmt.Sprintf(
 		"[Telegram system event] I was added to a %s.\nGroup title: %s\nGroup id: %d\nAdded by: %s\nWrite a short first message for the group. It should confirm I was added and explain how to trigger me.",
-		chat.Type, chatName, chat.ID, addedBy,
+		string(chat.Type), chatName, chat.ID, addedBy,
 	)
 
 	result, err := runner.Run(ctx, "telegram", eventPrompt)
 	if err != nil || result.ExitCode != 0 {
-		_ = SendMessage(token, chat.ID, "I was added to this group. Mention me with a command to start.")
+		cfg := config.GetSettings()
+		_ = SendMessage(cfg.Telegram.Token, chat.ID, "I was added to this group. Mention me with a command to start.")
 		if err != nil {
 			log.Printf("[Telegram] group-added event error: %v", err)
 		}
@@ -954,16 +782,16 @@ func handleMyChatMember(ctx context.Context, update *TelegramMyChatMemberUpdate)
 	if msg == "" {
 		msg = "I was added to this group."
 	}
-	_ = SendMessage(token, chat.ID, msg)
+	cfg := config.GetSettings()
+	_ = SendMessage(cfg.Telegram.Token, chat.ID, msg)
 }
 
 // ---------------------------------------------------------------------------
 // Message handler
 // ---------------------------------------------------------------------------
 
-func handleMessage(ctx context.Context, msg *TelegramMessage) {
+func handleMessage(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	cfg := config.GetSettings()
-	token := cfg.Telegram.Token
 	var userID int64
 	if msg.From != nil {
 		userID = msg.From.ID
@@ -972,8 +800,8 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 	threadID := msg.MessageThreadID
 	text, _ := getMessageTextAndEntities(msg)
 	chatType := msg.Chat.Type
-	isPrivate := chatType == "private"
-	isGroup := chatType == "group" || chatType == "supergroup"
+	isPrivate := chatType == models.ChatTypePrivate
+	isGroup := chatType == models.ChatTypeGroup || chatType == models.ChatTypeSupergroup
 	hasImage := len(msg.Photo) > 0 || isImageDocument(msg.Document)
 	hasVoice := msg.Voice != nil || msg.Audio != nil || isAudioDocument(msg.Document)
 
@@ -989,7 +817,7 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 			return
 		}
 	}
-	debugLog("Handle message chat=%d type=%s from=%d reason=%s text=%q", chatID, chatType, userID, triggerReason, truncate(text, 80))
+	debugLog("Handle message chat=%d type=%s from=%d reason=%s text=%q", chatID, string(chatType), userID, triggerReason, truncate(text, 80))
 
 	// Authorization check
 	if userID != 0 && len(cfg.Telegram.AllowedUserIds) > 0 {
@@ -1002,7 +830,7 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 		}
 		if !allowed {
 			if isPrivate {
-				_ = sendMessageInternal(token, chatID, "Unauthorized.", threadID)
+				_ = sendMessageInternal(ctx, b, chatID, "Unauthorized.", threadID)
 			} else {
 				log.Printf("[Telegram] Ignored group message from unauthorized user %d in chat %d", userID, chatID)
 				debugLog("Skip group message chat=%d from=%d reason=unauthorized_user", chatID, userID)
@@ -1019,7 +847,7 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 	command := extractTelegramCommand(text)
 
 	if command == "/start" {
-		_ = sendMessageInternal(token, chatID, "Hello! Send me a message and I'll respond using Claude.\nUse /reset to start a fresh session.", threadID)
+		_ = sendMessageInternal(ctx, b, chatID, "Hello! Send me a message and I'll respond using Claude.\nUse /reset to start a fresh session.", threadID)
 		return
 	}
 
@@ -1027,18 +855,18 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 		if err := sessions.ResetSession(); err != nil {
 			log.Printf("[Telegram] Reset session error: %v", err)
 		}
-		_ = sendMessageInternal(token, chatID, "Global session reset. Next message starts fresh.", threadID)
+		_ = sendMessageInternal(ctx, b, chatID, "Global session reset. Next message starts fresh.", threadID)
 		return
 	}
 
 	// Secretary: detect reply to a bot alert message
 	mu.Lock()
-	currentBotID := botID
+	currentBotID := botIDVal
 	mu.Unlock()
 	if msg.ReplyToMessage != nil && text != "" && currentBotID != 0 &&
 		msg.ReplyToMessage.From != nil && msg.ReplyToMessage.From.ID == currentBotID {
-		replyMsgID := msg.ReplyToMessage.MessageID
-		if trySecretaryReply(token, chatID, threadID, replyMsgID, text) {
+		replyMsgID := msg.ReplyToMessage.ID
+		if trySecretaryReply(ctx, b, chatID, threadID, replyMsgID, text) {
 			return
 		}
 	}
@@ -1062,20 +890,19 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 
 	log.Printf("[%s] Telegram %s%s: %q", time.Now().Format("15:04:05"), label, mediaSuffix, truncate(text, 60))
 
-	// CRITICAL FIX: Start typing indicator with context cancellation.
-	// Always cleared in defer, even if runner hangs.
+	// Start typing indicator with context cancellation.
 	typingCtx, typingCancel := context.WithCancel(ctx)
 	defer typingCancel()
 	go func() {
 		ticker := time.NewTicker(4 * time.Second)
 		defer ticker.Stop()
-		sendTyping(token, chatID, threadID) // immediate first send
+		sendTyping(typingCtx, b, chatID, threadID)
 		for {
 			select {
 			case <-typingCtx.Done():
 				return
 			case <-ticker.C:
-				sendTyping(token, chatID, threadID)
+				sendTyping(typingCtx, b, chatID, threadID)
 			}
 		}
 	}()
@@ -1083,7 +910,7 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 	// Download image if present
 	var imagePath string
 	if hasImage {
-		path, err := downloadImageFromMessage(token, msg)
+		path, err := downloadImageFromMessage(ctx, b, msg)
 		if err != nil {
 			log.Printf("[Telegram] Failed to download image for %s: %v", label, err)
 		} else {
@@ -1094,7 +921,7 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 	// Download and transcribe voice if present
 	var voiceTranscript string
 	if hasVoice {
-		voicePath, err := downloadVoiceFromMessage(token, msg)
+		voicePath, err := downloadVoiceFromMessage(ctx, b, msg)
 		if err != nil {
 			log.Printf("[Telegram] Failed to download voice for %s: %v", label, err)
 		} else if voicePath != "" {
@@ -1122,12 +949,11 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 
 	// Build prompt
 	promptParts := []string{fmt.Sprintf("[Telegram from %s]", label)}
-	if threadID != nil {
-		promptParts = append(promptParts, fmt.Sprintf("[thread:%d]", *threadID))
+	if threadID != 0 {
+		promptParts = append(promptParts, fmt.Sprintf("[thread:%d]", threadID))
 	}
 
 	if skillContext != "" {
-		// Strip the slash command from the message text and pass remaining args
 		args := strings.TrimSpace(text)
 		if command != "" && len(args) >= len(command) {
 			args = strings.TrimSpace(args[len(command):])
@@ -1157,14 +983,14 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 
 	prefixedPrompt := strings.Join(promptParts, "\n")
 
-	// CRITICAL FIX: Use context.Context with timeout for the runner call
+	// Use context.Context with timeout for the runner call
 	runCtx, runCancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer runCancel()
 
 	result, err := runner.RunUserMessage(runCtx, "telegram", prefixedPrompt)
 	if err != nil {
 		log.Printf("[Telegram] Error for %s: %v", label, err)
-		_ = sendMessageInternal(token, chatID, fmt.Sprintf("Error: %v", err), threadID)
+		_ = sendMessageInternal(ctx, b, chatID, fmt.Sprintf("Error: %v", err), threadID)
 		return
 	}
 
@@ -1173,7 +999,7 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 		if errText == "" {
 			errText = "Unknown error"
 		}
-		_ = sendMessageInternal(token, chatID, fmt.Sprintf("Error (exit %d): %s", result.ExitCode, errText), threadID)
+		_ = sendMessageInternal(ctx, b, chatID, fmt.Sprintf("Error (exit %d): %s", result.ExitCode, errText), threadID)
 		return
 	}
 
@@ -1183,24 +1009,24 @@ func handleMessage(ctx context.Context, msg *TelegramMessage) {
 	}
 	cleanedText, reactionEmoji := extractReactionDirective(stdout)
 	if reactionEmoji != "" {
-		if err := sendReaction(token, chatID, msg.MessageID, reactionEmoji); err != nil {
+		if err := sendReaction(ctx, b, chatID, msg.ID, reactionEmoji); err != nil {
 			log.Printf("[Telegram] Failed to send reaction for %s: %v", label, err)
 		}
 	}
 	if cleanedText == "" {
 		cleanedText = "(empty response)"
 	}
-	_ = sendMessageInternal(token, chatID, cleanedText, threadID)
+	_ = sendMessageInternal(ctx, b, chatID, cleanedText, threadID)
 }
 
 // ---------------------------------------------------------------------------
 // Bot command registration
 // ---------------------------------------------------------------------------
 
-func registerBotCommands(token string) {
+func registerBotCommands(ctx context.Context, b *tgbot.Bot) {
 	allSkills := skills.ListSkills()
 
-	commands := []botCommand{
+	commands := []models.BotCommand{
 		{Command: "start", Description: "Show welcome message"},
 		{Command: "reset", Description: "Reset session and start fresh"},
 	}
@@ -1228,15 +1054,15 @@ func registerBotCommands(token string) {
 		if len(desc) > 256 {
 			desc = desc[:256]
 		}
-		commands = append(commands, botCommand{Command: cmd, Description: desc})
+		commands = append(commands, models.BotCommand{Command: cmd, Description: desc})
 	}
 
 	if len(commands) > 100 {
 		commands = commands[:100]
 	}
 
-	_, err := callAPI[json.RawMessage](token, "setMyCommands", map[string]interface{}{
-		"commands": commands,
+	_, err := b.SetMyCommands(ctx, &tgbot.SetMyCommandsParams{
+		Commands: commands,
 	})
 	if err != nil {
 		log.Printf("[Telegram] Failed to register commands: %v", err)
@@ -1251,22 +1077,169 @@ func registerBotCommands(token string) {
 }
 
 // ---------------------------------------------------------------------------
-// Polling loop
+// Default update handler (dispatches all update types)
 // ---------------------------------------------------------------------------
 
-func poll(ctx context.Context) {
+func defaultUpdateHandler(ctx context.Context, b *tgbot.Bot, update *models.Update) {
+	// Collect all incoming messages
+	var incoming []*models.Message
+	if update.Message != nil {
+		incoming = append(incoming, update.Message)
+	}
+	if update.EditedMessage != nil {
+		incoming = append(incoming, update.EditedMessage)
+	}
+	if update.ChannelPost != nil {
+		incoming = append(incoming, update.ChannelPost)
+	}
+	if update.EditedChannelPost != nil {
+		incoming = append(incoming, update.EditedChannelPost)
+	}
+
+	for _, m := range incoming {
+		go func(msg *models.Message) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[Telegram] handleMessage panic: %v", r)
+				}
+			}()
+			handleMessage(ctx, b, msg)
+		}(m)
+	}
+
+	if update.MyChatMember != nil {
+		go func(u *models.ChatMemberUpdated) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[Telegram] my_chat_member panic: %v", r)
+				}
+			}()
+			handleMyChatMember(ctx, b, u)
+		}(update.MyChatMember)
+	}
+
+	if update.CallbackQuery != nil {
+		go func(q *models.CallbackQuery) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("[Telegram] callback_query panic: %v", r)
+				}
+			}()
+			handleCallbackQuery(ctx, b, q)
+		}(update.CallbackQuery)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Bot creation helper
+// ---------------------------------------------------------------------------
+
+func newBot(token string) (*tgbot.Bot, error) {
+	opts := []tgbot.Option{
+		tgbot.WithDefaultHandler(defaultUpdateHandler),
+		tgbot.WithAllowedUpdates(tgbot.AllowedUpdates{"message", "my_chat_member", "callback_query"}),
+	}
+	if debugMode {
+		opts = append(opts, tgbot.WithDebugHandler(func(format string, args ...any) {
+			log.Printf("[Telegram][debug] "+format, args...)
+		}))
+	}
+	return tgbot.New(token, opts...)
+}
+
+// ---------------------------------------------------------------------------
+// Exported entry points
+// ---------------------------------------------------------------------------
+
+// StartPolling starts the Telegram polling loop in a background goroutine.
+func StartPolling(ctx context.Context, debug bool) {
+	debugMode = debug
+
+	go func() {
+		runner.EnsureProjectClaudeMd()
+
+		cfg := config.GetSettings()
+		token := cfg.Telegram.Token
+
+		b, err := newBot(token)
+		if err != nil {
+			log.Printf("[Telegram] Failed to create bot: %v", err)
+			return
+		}
+		botInstance = b
+
+		me, err := b.GetMe(ctx)
+		if err != nil {
+			log.Printf("[Telegram] getMe failed: %v", err)
+		} else {
+			mu.Lock()
+			botUsername = me.Username
+			botIDVal = me.ID
+			mu.Unlock()
+			if me.Username != "" {
+				log.Printf("  Bot: @%s", me.Username)
+			} else {
+				log.Printf("  Bot: %d", me.ID)
+			}
+			if me.CanReadAllGroupMessages {
+				log.Printf("  Group privacy: disabled (reads all messages)")
+			} else {
+				log.Printf("  Group privacy: enabled (commands & mentions only)")
+			}
+		}
+
+		log.Println("Telegram bot started (long polling)")
+		if len(cfg.Telegram.AllowedUserIds) == 0 {
+			log.Printf("  Allowed users: all")
+		} else {
+			parts := make([]string, len(cfg.Telegram.AllowedUserIds))
+			for i, id := range cfg.Telegram.AllowedUserIds {
+				parts[i] = fmt.Sprintf("%d", id)
+			}
+			log.Printf("  Allowed users: %s", strings.Join(parts, ", "))
+		}
+		if debugMode {
+			log.Println("  Debug: enabled")
+		}
+
+		go registerBotCommands(ctx, b)
+
+		b.Start(ctx)
+	}()
+}
+
+// Telegram is the standalone entry point for running the Telegram bot.
+func Telegram() {
+	if _, err := config.LoadSettings(); err != nil {
+		log.Fatalf("[Telegram] Failed to load settings: %v", err)
+	}
+	runner.EnsureProjectClaudeMd()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		cancel()
+	}()
+
 	cfg := config.GetSettings()
 	token := cfg.Telegram.Token
-	offset := 0
 
-	// Get bot info
-	me, err := callAPI[TelegramMe](token, "getMe", nil)
+	b, err := newBot(token)
+	if err != nil {
+		log.Fatalf("[Telegram] Failed to create bot: %v", err)
+	}
+	botInstance = b
+
+	me, err := b.GetMe(ctx)
 	if err != nil {
 		log.Printf("[Telegram] getMe failed: %v", err)
 	} else {
 		mu.Lock()
 		botUsername = me.Username
-		botID = me.ID
+		botIDVal = me.ID
 		mu.Unlock()
 		if me.Username != "" {
 			log.Printf("  Bot: @%s", me.Username)
@@ -1294,132 +1267,7 @@ func poll(ctx context.Context) {
 		log.Println("  Debug: enabled")
 	}
 
-	// Register available skills as bot command menu (non-blocking)
-	go registerBotCommands(token)
+	go registerBotCommands(ctx, b)
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		data, err := callAPI[[]TelegramUpdate](token, "getUpdates", map[string]interface{}{
-			"offset":          offset,
-			"timeout":         30,
-			"allowed_updates": []string{"message", "my_chat_member", "callback_query"},
-		})
-		if err != nil {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-			log.Printf("[Telegram] Poll error: %v", err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		if len(data) == 0 {
-			continue
-		}
-
-		for _, update := range data {
-			debugLog("Update %d keys: message=%v edited=%v channel=%v my_chat_member=%v callback=%v",
-				update.UpdateID,
-				update.Message != nil,
-				update.EditedMessage != nil,
-				update.ChannelPost != nil,
-				update.MyChatMember != nil,
-				update.CallbackQuery != nil,
-			)
-			offset = update.UpdateID + 1
-
-			// Collect all incoming messages
-			var incoming []*TelegramMessage
-			if update.Message != nil {
-				incoming = append(incoming, update.Message)
-			}
-			if update.EditedMessage != nil {
-				incoming = append(incoming, update.EditedMessage)
-			}
-			if update.ChannelPost != nil {
-				incoming = append(incoming, update.ChannelPost)
-			}
-			if update.EditedChannelPost != nil {
-				incoming = append(incoming, update.EditedChannelPost)
-			}
-
-			// Handle messages in goroutines so polling continues.
-			// They'll serialize via the runner queue.
-			for _, m := range incoming {
-				go func(msg *TelegramMessage) {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Printf("[Telegram] handleMessage panic: %v", r)
-						}
-					}()
-					handleMessage(ctx, msg)
-				}(m)
-			}
-
-			if update.MyChatMember != nil {
-				go func(u *TelegramMyChatMemberUpdate) {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Printf("[Telegram] my_chat_member panic: %v", r)
-						}
-					}()
-					handleMyChatMember(ctx, u)
-				}(update.MyChatMember)
-			}
-
-			if update.CallbackQuery != nil {
-				go func(q *TelegramCallbackQuery) {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Printf("[Telegram] callback_query panic: %v", r)
-						}
-					}()
-					handleCallbackQuery(q)
-				}(update.CallbackQuery)
-			}
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Exported entry points
-// ---------------------------------------------------------------------------
-
-// StartPolling starts the Telegram polling loop in a background goroutine.
-// It is called by the daemon start command when a Telegram token is configured.
-// The polling stops when ctx is cancelled.
-func StartPolling(ctx context.Context, debug bool) {
-	debugMode = debug
-
-	go func() {
-		runner.EnsureProjectClaudeMd()
-		poll(ctx)
-	}()
-}
-
-// Telegram is the standalone entry point for running the Telegram bot
-// (equivalent to `bun run src/index.ts telegram`). It blocks until interrupted.
-func Telegram() {
-	if _, err := config.LoadSettings(); err != nil {
-		log.Fatalf("[Telegram] Failed to load settings: %v", err)
-	}
-	runner.EnsureProjectClaudeMd()
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		cancel()
-	}()
-
-	poll(ctx)
+	b.Start(ctx)
 }
