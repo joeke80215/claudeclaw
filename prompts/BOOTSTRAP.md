@@ -81,6 +81,7 @@ Ask how they want to reach you:
 - **Just here** — terminal/web chat only
 - **WhatsApp** — link their personal account (you'll show a QR code)
 - **Telegram** — set up a bot via BotFather
+  - Also ask if they want to use a **Telegram Bot API Local Server** (`telegram.baseUrl`). This is useful for handling large files (up to 2GB), faster downloads in the same network, or running without internet access to Telegram's servers. If yes, guide them to set up [telegram-bot-api](https://github.com/tdlib/telegram-bot-api) and configure the URL (e.g. `http://localhost:8081`).
 
 Guide them through whichever they pick.
 

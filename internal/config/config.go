@@ -43,8 +43,9 @@ type HeartbeatConfig struct {
 
 // TelegramConfig holds Telegram bot configuration.
 type TelegramConfig struct {
-	Token          string `json:"token"`
+	Token          string  `json:"token"`
 	AllowedUserIds []int64 `json:"allowedUserIds"`
+	BaseURL        string  `json:"baseUrl"`
 }
 
 // DiscordConfig holds Discord bot configuration.
@@ -322,6 +323,9 @@ func parseSettings(raw map[string]interface{}, discordUserIds []string) *Setting
 				}
 			}
 			s.Telegram.AllowedUserIds = ids
+		}
+		if v, ok := tg["baseUrl"].(string); ok {
+			s.Telegram.BaseURL = strings.TrimSpace(v)
 		}
 	}
 

@@ -4,7 +4,7 @@ description: Show Telegram bot status and manage global session
 
 Show the Telegram bot integration status. Check the following:
 
-1. **Configuration**: Read `.claude/claudeclaw/settings.json` and check if `telegram.token` is set (show masked token: first 5 chars + "..."). Show `allowedUserIds`.
+1. **Configuration**: Read `.claude/claudeclaw/settings.json` and check if `telegram.token` is set (show masked token: first 5 chars + "..."). Show `allowedUserIds`. Show `baseUrl` if set, otherwise show "default (api.telegram.org)".
 
 2. **Global Session**: Read `.claude/claudeclaw/session.json` and show:
    - Session UUID (first 8 chars)

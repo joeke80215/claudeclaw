@@ -1134,10 +1134,13 @@ func defaultUpdateHandler(ctx context.Context, b *tgbot.Bot, update *models.Upda
 // Bot creation helper
 // ---------------------------------------------------------------------------
 
-func newBot(token string) (*tgbot.Bot, error) {
+func newBot(token string, serverURL string) (*tgbot.Bot, error) {
 	opts := []tgbot.Option{
 		tgbot.WithDefaultHandler(defaultUpdateHandler),
 		tgbot.WithAllowedUpdates(tgbot.AllowedUpdates{"message", "my_chat_member", "callback_query"}),
+	}
+	if serverURL != "" {
+		opts = append(opts, tgbot.WithServerURL(serverURL))
 	}
 	if debugMode {
 		opts = append(opts, tgbot.WithDebugHandler(func(format string, args ...any) {
@@ -1161,7 +1164,7 @@ func StartPolling(ctx context.Context, debug bool) {
 		cfg := config.GetSettings()
 		token := cfg.Telegram.Token
 
-		b, err := newBot(token)
+		b, err := newBot(token, cfg.Telegram.BaseURL)
 		if err != nil {
 			log.Printf("[Telegram] Failed to create bot: %v", err)
 			return
@@ -1189,6 +1192,9 @@ func StartPolling(ctx context.Context, debug bool) {
 		}
 
 		log.Println("Telegram bot started (long polling)")
+		if cfg.Telegram.BaseURL != "" {
+			log.Printf("  API server: %s", cfg.Telegram.BaseURL)
+		}
 		if len(cfg.Telegram.AllowedUserIds) == 0 {
 			log.Printf("  Allowed users: all")
 		} else {
@@ -1227,7 +1233,7 @@ func Telegram() {
 	cfg := config.GetSettings()
 	token := cfg.Telegram.Token
 
-	b, err := newBot(token)
+	b, err := newBot(token, cfg.Telegram.BaseURL)
 	if err != nil {
 		log.Fatalf("[Telegram] Failed to create bot: %v", err)
 	}
@@ -1254,6 +1260,9 @@ func Telegram() {
 	}
 
 	log.Println("Telegram bot started (long polling)")
+	if cfg.Telegram.BaseURL != "" {
+		log.Printf("  API server: %s", cfg.Telegram.BaseURL)
+	}
 	if len(cfg.Telegram.AllowedUserIds) == 0 {
 		log.Printf("  Allowed users: all")
 	} else {
