@@ -1140,27 +1140,31 @@ const (
 	botInitTimeout       = 60 * time.Second
 	botTLSTimeout        = 30 * time.Second
 	botPollTimeout       = 90 * time.Second
+	// localPollTimeout makes getUpdates return immediately (short polling).
+	// The library sends Timeout = pollTimeout-1s to the API, so 1s → 0.
+	localPollTimeout     = 1 * time.Second
 )
 
 func newBot(token string, serverURL string) (*tgbot.Bot, error) {
 	transport := &http.Transport{
 		TLSHandshakeTimeout: botTLSTimeout,
 	}
-	// Do NOT set http.Client.Timeout here. The go-telegram/bot library uses
-	// long polling for getUpdates (pollTimeout-1s ≈ 89s). A global client
-	// timeout would race against the long-poll wait and prematurely cancel
-	// the request, causing the bot to enter an error-backoff loop and appear
-	// unresponsive. Let the library manage timeouts via context instead.
 	httpClient := &http.Client{
 		Transport: transport,
 	}
 
+	// Use short polling for local API servers (immediate return),
+	// long polling for the official Telegram API.
+	pollTimeout := botPollTimeout
+	if serverURL != "" {
+		pollTimeout = localPollTimeout
+	}
 
 	opts := []tgbot.Option{
 		tgbot.WithDefaultHandler(defaultUpdateHandler),
 		tgbot.WithAllowedUpdates(tgbot.AllowedUpdates{"message", "my_chat_member", "callback_query"}),
 		tgbot.WithCheckInitTimeout(botInitTimeout),
-		tgbot.WithHTTPClient(botPollTimeout, httpClient),
+		tgbot.WithHTTPClient(pollTimeout, httpClient),
 	}
 	if serverURL != "" {
 		opts = append(opts, tgbot.WithServerURL(serverURL))
