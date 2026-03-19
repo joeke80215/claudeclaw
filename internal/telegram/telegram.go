@@ -1146,9 +1146,13 @@ func newBot(token string, serverURL string) (*tgbot.Bot, error) {
 	transport := &http.Transport{
 		TLSHandshakeTimeout: botTLSTimeout,
 	}
+	// Do NOT set http.Client.Timeout here. The go-telegram/bot library uses
+	// long polling for getUpdates (pollTimeout-1s ≈ 89s). A global client
+	// timeout would race against the long-poll wait and prematurely cancel
+	// the request, causing the bot to enter an error-backoff loop and appear
+	// unresponsive. Let the library manage timeouts via context instead.
 	httpClient := &http.Client{
 		Transport: transport,
-		Timeout:   botPollTimeout,
 	}
 
 
