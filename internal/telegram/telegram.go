@@ -1142,7 +1142,7 @@ const (
 	botPollTimeout       = 90 * time.Second
 )
 
-func newBot(token string) (*tgbot.Bot, error) {
+func newBot(token string, serverURL string) (*tgbot.Bot, error) {
 	transport := &http.Transport{
 		TLSHandshakeTimeout: botTLSTimeout,
 	}
@@ -1151,11 +1151,15 @@ func newBot(token string) (*tgbot.Bot, error) {
 		Timeout:   botPollTimeout,
 	}
 
+
 	opts := []tgbot.Option{
 		tgbot.WithDefaultHandler(defaultUpdateHandler),
 		tgbot.WithAllowedUpdates(tgbot.AllowedUpdates{"message", "my_chat_member", "callback_query"}),
 		tgbot.WithCheckInitTimeout(botInitTimeout),
 		tgbot.WithHTTPClient(botPollTimeout, httpClient),
+	}
+	if serverURL != "" {
+		opts = append(opts, tgbot.WithServerURL(serverURL))
 	}
 	if debugMode {
 		opts = append(opts, tgbot.WithDebugHandler(func(format string, args ...any) {
@@ -1166,10 +1170,10 @@ func newBot(token string) (*tgbot.Bot, error) {
 }
 
 // newBotWithRetry creates a bot with retries on transient network failures.
-func newBotWithRetry(ctx context.Context, token string) (*tgbot.Bot, error) {
+func newBotWithRetry(ctx context.Context, token string, serverURL string) (*tgbot.Bot, error) {
 	var lastErr error
 	for attempt := 1; attempt <= botInitRetries; attempt++ {
-		b, err := newBot(token)
+		b, err := newBot(token, serverURL)
 		if err == nil {
 			return b, nil
 		}
@@ -1200,7 +1204,7 @@ func StartPolling(ctx context.Context, debug bool) {
 		cfg := config.GetSettings()
 		token := cfg.Telegram.Token
 
-		b, err := newBotWithRetry(ctx, token)
+		b, err := newBotWithRetry(ctx, token, cfg.Telegram.BaseURL)
 		if err != nil {
 			log.Printf("[Telegram] Failed to create bot: %v", err)
 			return
@@ -1228,6 +1232,9 @@ func StartPolling(ctx context.Context, debug bool) {
 		}
 
 		log.Println("Telegram bot started (long polling)")
+		if cfg.Telegram.BaseURL != "" {
+			log.Printf("  API server: %s", cfg.Telegram.BaseURL)
+		}
 		if len(cfg.Telegram.AllowedUserIds) == 0 {
 			log.Printf("  Allowed users: all")
 		} else {
@@ -1266,7 +1273,7 @@ func Telegram() {
 	cfg := config.GetSettings()
 	token := cfg.Telegram.Token
 
-	b, err := newBotWithRetry(ctx, token)
+	b, err := newBotWithRetry(ctx, token, cfg.Telegram.BaseURL)
 	if err != nil {
 		log.Fatalf("[Telegram] Failed to create bot: %v", err)
 	}
@@ -1293,6 +1300,9 @@ func Telegram() {
 	}
 
 	log.Println("Telegram bot started (long polling)")
+	if cfg.Telegram.BaseURL != "" {
+		log.Printf("  API server: %s", cfg.Telegram.BaseURL)
+	}
 	if len(cfg.Telegram.AllowedUserIds) == 0 {
 		log.Printf("  Allowed users: all")
 	} else {

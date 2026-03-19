@@ -29,6 +29,7 @@ Parse `$ARGUMENTS` to identify what the user wants. If no arguments are given, s
 
    **Telegram**
    - Token: (first 5 chars + "..." or "not configured")
+   - API server: (show baseUrl or "default (api.telegram.org)")
    - Allowed users: (list IDs or "none")
 
    **Security**
@@ -104,12 +105,25 @@ Set the allowed Telegram user IDs.
 4. Set `telegram.allowedUserIds` to the array of numbers.
 5. Write and confirm.
 
+### `telegram baseurl <url>` / `telegram baseurl`
+
+Set or clear a custom Telegram Bot API Local Server URL (e.g. `http://localhost:8081`).
+
+1. If URL is in `$ARGUMENTS`, use it directly.
+2. Otherwise, use **AskUserQuestion**: "Do you want to use a Telegram Bot API Local Server?" (header: "API Server", options:
+   - "No, use official API (Recommended)" — description: "Use the default Telegram API at api.telegram.org"
+   - "Yes, use a local server" — description: "Point to a self-hosted telegram-bot-api server. You'll need to provide the URL (e.g. http://localhost:8081). See https://github.com/tdlib/telegram-bot-api for setup instructions.")
+3. If "Yes", ask with **AskUserQuestion**: "What is the URL of your Telegram Bot API Local Server?" (header: "Server URL", options: "http://localhost:8081" — description: "Default local server address", let user type via Other)
+4. Read `.claude/claudeclaw/settings.json`.
+5. Set `telegram.baseUrl` to the provided URL, or `""` to clear it (when choosing official API).
+6. Write and confirm. Note: the daemon will pick up the change within 30 seconds.
+
 ### `telegram off` / `telegram disable`
 
 Disable Telegram integration.
 
 1. Read `.claude/claudeclaw/settings.json`.
-2. Set `telegram.token` to `""` and `telegram.allowedUserIds` to `[]`.
+2. Set `telegram.token` to `""`, `telegram.allowedUserIds` to `[]`, and `telegram.baseUrl` to `""`.
 3. Write and confirm.
 
 ### `model <name>` / `model`
@@ -225,7 +239,8 @@ Reset all settings to defaults.
      },
      "telegram": {
        "token": "",
-       "allowedUserIds": []
+       "allowedUserIds": [],
+       "baseUrl": ""
      },
      "security": {
        "level": "moderate",
@@ -268,7 +283,8 @@ Location: `.claude/claudeclaw/settings.json`
   },
   "telegram": {
     "token": "123456:ABC-DEF...",
-    "allowedUserIds": [123456789]
+    "allowedUserIds": [123456789],
+    "baseUrl": ""
   },
   "security": {
     "level": "moderate",
@@ -301,6 +317,7 @@ Location: `.claude/claudeclaw/settings.json`
 | `heartbeat.forwardToTelegram`      | boolean | Forward heartbeat output to Telegram (`false` suppresses `HEARTBEAT_OK`) |
 | `telegram.token`           | string     | Bot token from @BotFather                      |
 | `telegram.allowedUserIds`  | number[]   | Telegram user IDs allowed to interact          |
+| `telegram.baseUrl`         | string     | Custom Telegram Bot API Local Server URL (empty = official api.telegram.org) |
 | `security.level`           | string     | `locked` \| `strict` \| `moderate` \| `unrestricted` |
 | `security.allowedTools`    | string[]   | Extra tools to allow                           |
 | `security.disallowedTools` | string[]   | Tools to block                                 |
