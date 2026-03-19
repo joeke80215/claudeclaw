@@ -983,11 +983,7 @@ func handleMessage(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 
 	prefixedPrompt := strings.Join(promptParts, "\n")
 
-	// Use context.Context with timeout for the runner call
-	runCtx, runCancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer runCancel()
-
-	result, err := runner.RunUserMessage(runCtx, "telegram", prefixedPrompt)
+	result, err := runner.RunUserMessage(ctx, "telegram", prefixedPrompt)
 	if err != nil {
 		log.Printf("[Telegram] Error for %s: %v", label, err)
 		_ = sendMessageInternal(ctx, b, chatID, fmt.Sprintf("Error: %v", err), threadID)
@@ -997,7 +993,11 @@ func handleMessage(ctx context.Context, b *tgbot.Bot, msg *models.Message) {
 	if result.ExitCode != 0 {
 		errText := result.Stderr
 		if errText == "" {
-			errText = "Unknown error"
+			if result.ExitCode == 143 {
+				errText = "Process was terminated (SIGTERM)"
+			} else {
+				errText = "Unknown error"
+			}
 		}
 		_ = sendMessageInternal(ctx, b, chatID, fmt.Sprintf("Error (exit %d): %s", result.ExitCode, errText), threadID)
 		return

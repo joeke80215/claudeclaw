@@ -713,7 +713,11 @@ func (g *Gateway) handleMessageCreate(ctx context.Context, token string, msg *di
 	if result.ExitCode != 0 {
 		errText := result.Stderr
 		if errText == "" {
-			errText = "Unknown error"
+			if result.ExitCode == 143 {
+				errText = "Process was terminated (SIGTERM)"
+			} else {
+				errText = "Unknown error"
+			}
 		}
 		_ = SendMessage(cfg.Token, channelID,
 			fmt.Sprintf("Error (exit %d): %s", result.ExitCode, errText), nil)
