@@ -1140,9 +1140,10 @@ const (
 	botInitTimeout       = 60 * time.Second
 	botTLSTimeout        = 30 * time.Second
 	botPollTimeout       = 90 * time.Second
-	// localPollTimeout makes getUpdates return immediately (short polling).
-	// The library sends Timeout = pollTimeout-1s to the API, so 1s → 0.
-	localPollTimeout     = 1 * time.Second
+	// localPollTimeout uses a 1-second server-side wait for local API servers.
+	// The library sends Timeout = pollTimeout-1s to the API, so 2s → 1s.
+	// This avoids a tight loop while keeping response near-instant.
+	localPollTimeout     = 2 * time.Second
 )
 
 func newBot(token string, serverURL string) (*tgbot.Bot, error) {
