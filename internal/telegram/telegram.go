@@ -1140,6 +1140,10 @@ const (
 	botInitTimeout       = 60 * time.Second
 	botTLSTimeout        = 30 * time.Second
 	botPollTimeout       = 90 * time.Second
+	// localPollTimeout uses a 1-second server-side wait for local API servers.
+	// The library sends Timeout = pollTimeout-1s to the API, so 2s → 1s.
+	// This avoids a tight loop while keeping response near-instant.
+	localPollTimeout     = 2 * time.Second
 )
 
 func newBot(token string, serverURL string) (*tgbot.Bot, error) {
@@ -1148,15 +1152,20 @@ func newBot(token string, serverURL string) (*tgbot.Bot, error) {
 	}
 	httpClient := &http.Client{
 		Transport: transport,
-		Timeout:   botPollTimeout,
 	}
 
+	// Use short polling for local API servers (immediate return),
+	// long polling for the official Telegram API.
+	pollTimeout := botPollTimeout
+	if serverURL != "" {
+		pollTimeout = localPollTimeout
+	}
 
 	opts := []tgbot.Option{
 		tgbot.WithDefaultHandler(defaultUpdateHandler),
 		tgbot.WithAllowedUpdates(tgbot.AllowedUpdates{"message", "my_chat_member", "callback_query"}),
 		tgbot.WithCheckInitTimeout(botInitTimeout),
-		tgbot.WithHTTPClient(botPollTimeout, httpClient),
+		tgbot.WithHTTPClient(pollTimeout, httpClient),
 	}
 	if serverURL != "" {
 		opts = append(opts, tgbot.WithServerURL(serverURL))

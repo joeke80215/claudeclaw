@@ -74,7 +74,7 @@ The setup wizard walks you through model, heartbeat, Telegram, Discord, and secu
 - **Cron Jobs:** Timezone-aware schedules for repeating or one-time tasks with reliable execution.
 
 ### Communication
-- **Telegram:** Text, image, and voice support.
+- **Telegram:** Text, image, and voice support. Optional [Telegram Bot API Local Server](https://core.telegram.org/bots/api#using-a-local-bot-api-server) support for large file uploads (up to 2 GB) and faster local network access via `telegram.baseUrl`.
 - **Discord:** DMs, server mentions/replies, slash commands, voice messages, and image attachments.
 - **Time Awareness:** Message time prefixes help the agent understand delays and daily patterns.
 
@@ -83,6 +83,38 @@ The setup wizard walks you through model, heartbeat, Telegram, Discord, and secu
 - **Web Dashboard:** Manage jobs, monitor runs, and inspect logs in real time.
 - **Security Levels:** Four access levels from read-only to full system access.
 - **Model Selection:** Switch models based on your workload.
+
+## Telegram Bot API Local Server
+
+By default, ClaudeClaw connects to the official Telegram Bot API (`https://api.telegram.org`). If you run a self-hosted [Telegram Bot API Local Server](https://core.telegram.org/bots/api#using-a-local-bot-api-server), you can point ClaudeClaw to it for:
+
+- **Large file uploads** — up to 2 GB (vs 50 MB on the public API)
+- **Faster response times** — no round-trip to Telegram's servers when both bot and API server are on the same network
+- **No download size limit** — download files of any size
+
+### Setup
+
+1. Run the setup wizard and select **Yes** when asked about Local API Server:
+   ```
+   /claudeclaw:start
+   ```
+
+2. Or configure it directly via the config skill:
+   ```
+   /claudeclaw:config telegram baseurl
+   ```
+
+3. Or set it manually in `.claude/claudeclaw/settings.json`:
+   ```json
+   {
+     "telegram": {
+       "token": "YOUR_BOT_TOKEN",
+       "baseUrl": "http://localhost:8081"
+     }
+   }
+   ```
+
+> **Note:** The `baseUrl` should point to your local API server's root URL (e.g., `http://localhost:8081`). Leave it empty or omit it to use the official Telegram API.
 
 ## Build & Run
 

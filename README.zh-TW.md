@@ -72,7 +72,7 @@ claude plugin install claudeclaw
 
 ### 通訊整合
 
-- **Telegram：** 支援文字、圖片與語音訊息。
+- **Telegram：** 支援文字、圖片與語音訊息。可選配 [Telegram Bot API Local Server](https://core.telegram.org/bots/api#using-a-local-bot-api-server)，透過 `telegram.baseUrl` 設定，支援大檔上傳（最大 2 GB）及更快的本地網路存取。
 - **Discord：** 支援私訊、伺服器中的 @ 提及與回覆、斜線指令（slash commands）、語音訊息，以及圖片附件。
 - **時間感知：** 訊息附帶時間前綴，協助 AI 理解回覆延遲和日常行為模式。
 
@@ -94,6 +94,38 @@ claude plugin install claudeclaw
 - **自訂技能：** 在 `skills/<skill-name>/SKILL.md` 中定義 Markdown 格式的技能，附帶 YAML 前置資料（frontmatter）。
 - **三層搜尋：** 自動探索專案層級、全域層級，以及外掛套件層級的技能。
 - **內建技能：** `create-skill`（技能建立精靈）、`install-skill`（從 skills.sh / GitHub 安裝）、`telegram-react`（Telegram 表情回應）。
+
+## Telegram Bot API Local Server
+
+預設情況下，ClaudeClaw 連線至官方 Telegram Bot API（`https://api.telegram.org`）。若你架設了 [Telegram Bot API Local Server](https://core.telegram.org/bots/api#using-a-local-bot-api-server)，可將 ClaudeClaw 指向該伺服器以獲得：
+
+- **大檔上傳** — 最大 2 GB（公開 API 限制為 50 MB）
+- **更快的回應速度** — 當機器人和 API 伺服器在同一網路時，無需繞經 Telegram 伺服器
+- **無下載大小限制** — 可下載任意大小的檔案
+
+### 設定方式
+
+1. 執行設定精靈，在詢問是否使用 Local API Server 時選擇 **是**：
+   ```
+   /claudeclaw:start
+   ```
+
+2. 或透過設定技能直接配置：
+   ```
+   /claudeclaw:config telegram baseurl
+   ```
+
+3. 或手動編輯 `.claude/claudeclaw/settings.json`：
+   ```json
+   {
+     "telegram": {
+       "token": "YOUR_BOT_TOKEN",
+       "baseUrl": "http://localhost:8081"
+     }
+   }
+   ```
+
+> **注意：** `baseUrl` 應指向你的本地 API 伺服器根 URL（例如 `http://localhost:8081`）。留空或省略則使用官方 Telegram API。
 
 ## 指令參考
 
