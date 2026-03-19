@@ -19,13 +19,14 @@ Start the heartbeat daemon for this project. Follow these steps exactly:
        git clone https://github.com/joeke80215/claudeclaw.git .claudeclaw-src && cp -r .claudeclaw-src/cmd .claudeclaw-src/internal .claudeclaw-src/go.mod .claudeclaw-src/go.sum .claudeclaw-src/prompts . 2>/dev/null; rm -rf .claudeclaw-src
        ```
    - Check if `go` is available with `which go`.
-   - If `go` is **not** available, auto-install it:
-     - macOS: `brew install go` (check `which brew` first; if Homebrew is missing, tell user to install Go manually from https://go.dev/dl/ and exit)
-     - Linux: download and install:
-       ```bash
-       curl -fsSL https://go.dev/dl/go1.24.1.linux-amd64.tar.gz -o /tmp/go.tar.gz && sudo tar -C /usr/local -xzf /tmp/go.tar.gz && rm /tmp/go.tar.gz
-       export PATH=$PATH:/usr/local/go/bin
-       ```
+   - If `go` is **not** available, guide the user through installation using the `install-go` skill (`~/.claude/skills/install-go/`):
+     - Use **AskUserQuestion**: "Go is required to build ClaudeClaw but is not installed. How should we install it?" (header: "Go Install", options:
+       - "brew install go (Recommended for macOS)" — description: "Uses Homebrew. Only available if brew is installed." — only show if `which brew` succeeds
+       - "Download from go.dev (Recommended for Linux)" — description: "Downloads official Go binary and installs to /usr/local/go"
+       - "Skip — I'll install manually" — description: "Visit https://go.dev/dl/ to install Go yourself")
+     - If Homebrew: run `brew install go`
+     - If Download: run `~/.claude/skills/install-go/scripts/install-go.sh` and then `export PATH=$PATH:/usr/local/go/bin`
+     - If Skip: show the download link and exit
      - If install fails, tell the user to install Go manually from https://go.dev/dl/ and exit.
    - Build the binary:
      ```bash
@@ -83,6 +84,11 @@ Start the heartbeat daemon for this project. Follow these steps exactly:
      - Telegram bot token (hint: create/get it from `@BotFather`)
      - Allowed Telegram user IDs (hint: use `@userinfobot` to get your numeric ID)
      - Set `telegram.token` and `telegram.allowedUserIds` (as array of numbers) accordingly.
+     - Then ask with **AskUserQuestion**: "Do you want to use a Telegram Bot API Local Server?" (header: "API Server", options:
+       - "No, use official API (Recommended)" — description: "Use the default Telegram API at api.telegram.org"
+       - "Yes, use a local server" — description: "Self-hosted telegram-bot-api for large files (up to 2GB) and faster local access. See https://github.com/tdlib/telegram-bot-api")
+     - If "Yes", ask with **AskUserQuestion**: "What is the URL of your local API server?" (header: "Server URL", options: "http://localhost:8081" — description: "Default local server address", let user type via Other)
+     - Set `telegram.baseUrl` to the provided URL, or leave empty for official API.
      - Note: Telegram bot runs in-process with the daemon. All components (heartbeat, cron, telegram, discord) share one Claude session.
 
    - **If yes to Discord**: Do NOT use AskUserQuestion for Discord fields. Ask in normal free-form text for two values (both optional, user can skip either):
@@ -180,7 +186,8 @@ Defaults: `WEB_HOST=127.0.0.1`, `WEB_PORT=4632` unless changed via settings or `
   },
   "telegram": {
     "token": "123456:ABC-DEF...",
-    "allowedUserIds": [123456789]
+    "allowedUserIds": [123456789],
+    "baseUrl": ""
   },
   "discord": {
     "token": "MTIz...",
@@ -205,6 +212,7 @@ Defaults: `WEB_HOST=127.0.0.1`, `WEB_PORT=4632` unless changed via settings or `
 - Heartbeat template override (optional) — create `.claude/claudeclaw/prompts/HEARTBEAT.md` to replace the built-in heartbeat template for this project.
 - `telegram.token` — Telegram bot token from @BotFather
 - `telegram.allowedUserIds` — array of numeric Telegram user IDs allowed to interact
+- `telegram.baseUrl` — custom Telegram Bot API Local Server URL (empty = official api.telegram.org). Useful for large file support (up to 2GB) and faster local network access.
 - `discord.token` — Discord bot token from the Developer Portal
 - `discord.allowedUserIds` — array of string Discord user IDs (snowflakes) allowed to interact
 - `discord.listenChannels` — array of string channel IDs where the bot responds to all messages without requiring an @mention
