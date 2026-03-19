@@ -29,9 +29,6 @@ type RunResult struct {
 	ExitCode int
 }
 
-// DefaultTimeout is the default execution timeout for Claude Code processes.
-const DefaultTimeout = 10 * time.Minute
-
 // GracePeriod is the time to wait between SIGTERM and SIGKILL.
 const GracePeriod = 5 * time.Second
 
@@ -372,11 +369,7 @@ func execClaude(ctx context.Context, name, prompt string) (*RunResult, error) {
 
 	baseEnv := os.Environ()
 
-	// Apply timeout to the process execution.
-	execCtx, cancel := context.WithTimeout(ctx, DefaultTimeout)
-	defer cancel()
-
-	rawStdout, stderr, exitCode := runClaudeOnce(execCtx, args, primaryConfig.Model, primaryConfig.API, baseEnv)
+	rawStdout, stderr, exitCode := runClaudeOnce(ctx, args, primaryConfig.Model, primaryConfig.API, baseEnv)
 
 	// Check for rate limiting and retry with fallback if available.
 	primaryRateLimit := extractRateLimitMessage(rawStdout, stderr)
@@ -392,9 +385,7 @@ func execClaude(ctx context.Context, name, prompt string) (*RunResult, error) {
 		}
 		log.Printf("Claude limit reached; retrying with %s...", fbDesc)
 
-		execCtx2, cancel2 := context.WithTimeout(ctx, DefaultTimeout)
-		defer cancel2()
-		rawStdout, stderr, exitCode = runClaudeOnce(execCtx2, args, fallbackConfig.Model, fallbackConfig.API, baseEnv)
+		rawStdout, stderr, exitCode = runClaudeOnce(ctx, args, fallbackConfig.Model, fallbackConfig.API, baseEnv)
 		usedFallback = true
 	}
 
