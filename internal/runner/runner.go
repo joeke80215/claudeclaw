@@ -206,6 +206,13 @@ func parseStreamJSON(raw string) streamResult {
 	return sr
 }
 
+func truncateLog(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "...(truncated)"
+}
+
 // runClaudeOnce executes the claude CLI once with the given arguments, model, and API key.
 // It uses context for timeout/cancellation and sets up a process group for clean termination.
 func runClaudeOnce(ctx context.Context, baseArgs []string, model, api string, baseEnv []string) (rawStdout, stderr string, exitCode int) {
@@ -452,8 +459,29 @@ func execClaude(ctx context.Context, name, prompt string) (*RunResult, error) {
 		usedFallback = true
 	}
 
+	// Debug: log the raw output and command args for diagnosis.
+	log.Printf("[debug] execClaude args: %v", args)
+	log.Printf("[debug] rawStdout length: %d bytes", len(rawStdout))
+	if len(rawStdout) > 2000 {
+		log.Printf("[debug] rawStdout (first 2000): %s", rawStdout[:2000])
+	} else {
+		log.Printf("[debug] rawStdout: %s", rawStdout)
+	}
+	if stderr != "" {
+		log.Printf("[debug] stderr: %s", stderr)
+	}
+	log.Printf("[debug] exitCode: %d", exitCode)
+
 	// Parse the stream-json output to extract assistant text and session info.
 	parsed := parseStreamJSON(rawStdout)
+	log.Printf("[debug] parsed.AssistantText length: %d, parsed.ResultText length: %d, parsed.SessionID: %s",
+		len(parsed.AssistantText), len(parsed.ResultText), parsed.SessionID)
+	if parsed.AssistantText != "" {
+		log.Printf("[debug] parsed.AssistantText: %s", truncateLog(parsed.AssistantText, 500))
+	}
+	if parsed.ResultText != "" {
+		log.Printf("[debug] parsed.ResultText: %s", truncateLog(parsed.ResultText, 500))
+	}
 
 	sessionId := "unknown"
 	if existing != nil {
@@ -464,15 +492,19 @@ func execClaude(ctx context.Context, name, prompt string) (*RunResult, error) {
 	stdout := parsed.AssistantText
 	if stdout == "" {
 		stdout = parsed.ResultText
+		log.Printf("[debug] AssistantText empty, using ResultText")
 	}
 	if stdout == "" {
 		stdout = rawStdout // last resort: raw output
+		log.Printf("[debug] ResultText also empty, using rawStdout as fallback")
 	}
 
 	rateLimitMessage := extractRateLimitMessage(rawStdout, stderr)
 	if rateLimitMessage != "" {
 		stdout = rateLimitMessage
 	}
+
+	log.Printf("[debug] final stdout length: %d", len(stdout))
 
 	// For new sessions, save the session_id from the stream result.
 	if rateLimitMessage == "" && isNew && exitCode == 0 {
@@ -512,8 +544,12 @@ func execClaude(ctx context.Context, name, prompt string) (*RunResult, error) {
 	fmt.Fprintf(&logBuf, "Prompt: %s\n", prompt)
 	fmt.Fprintf(&logBuf, "Exit code: %d\n", result.ExitCode)
 	fmt.Fprintf(&logBuf, "\n## Output\n%s\n", stdout)
+	fmt.Fprintf(&logBuf, "\n## Raw Stdout\n%s\n", rawStdout)
+	fmt.Fprintf(&logBuf, "\n## Parsed AssistantText\n%s\n", parsed.AssistantText)
+	fmt.Fprintf(&logBuf, "\n## Parsed ResultText\n%s\n", parsed.ResultText)
+	fmt.Fprintf(&logBuf, "\n## Parsed SessionID\n%s\n", parsed.SessionID)
 	if stderr != "" {
-		fmt.Fprintf(&logBuf, "## Stderr\n%s\n", stderr)
+		fmt.Fprintf(&logBuf, "\n## Stderr\n%s\n", stderr)
 	}
 
 	if writeErr := os.WriteFile(logFile, []byte(logBuf.String()), 0o644); writeErr != nil {
