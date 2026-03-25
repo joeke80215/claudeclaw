@@ -138,6 +138,74 @@ func buildSecurityArgs(security config.SecurityConfig) []string {
 	return args
 }
 
+// streamResult holds the parsed output from a stream-json Claude execution.
+type streamResult struct {
+	// AssistantText is the concatenated text from all assistant messages.
+	AssistantText string
+	// SessionID from the result event (if present).
+	SessionID string
+	// ResultText is the "result" field from the final result event.
+	ResultText string
+	// RawOutput is the full raw stdout for fallback parsing.
+	RawOutput string
+}
+
+// parseStreamJSON parses stream-json output from Claude Code.
+// It extracts assistant text content and session_id from the stream events.
+func parseStreamJSON(raw string) streamResult {
+	sr := streamResult{RawOutput: raw}
+	var textParts []string
+
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var event map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			continue
+		}
+
+		var eventType string
+		if raw, ok := event["type"]; ok {
+			json.Unmarshal(raw, &eventType)
+		}
+
+		switch eventType {
+		case "assistant":
+			// Extract text content from assistant message.
+			var msg struct {
+				Message struct {
+					Content []struct {
+						Type string `json:"type"`
+						Text string `json:"text"`
+					} `json:"content"`
+				} `json:"message"`
+			}
+			if err := json.Unmarshal([]byte(line), &msg); err == nil {
+				for _, block := range msg.Message.Content {
+					if block.Type == "text" && block.Text != "" {
+						textParts = append(textParts, block.Text)
+					}
+				}
+			}
+		case "result":
+			// Extract session_id and result text.
+			var res struct {
+				SessionID string `json:"session_id"`
+				Result    string `json:"result"`
+			}
+			if err := json.Unmarshal([]byte(line), &res); err == nil {
+				sr.SessionID = res.SessionID
+				sr.ResultText = res.Result
+			}
+		}
+	}
+
+	sr.AssistantText = strings.Join(textParts, "\n")
+	return sr
+}
+
 // runClaudeOnce executes the claude CLI once with the given arguments, model, and API key.
 // It uses context for timeout/cancellation and sets up a process group for clean termination.
 func runClaudeOnce(ctx context.Context, baseArgs []string, model, api string, baseEnv []string) (rawStdout, stderr string, exitCode int) {
@@ -328,14 +396,9 @@ func execClaude(ctx context.Context, name, prompt string) (*RunResult, error) {
 	}
 	log.Printf("Running: %s (%s, security: %s)", name, sessionDesc, settings.Security.Level)
 
-	// New session: use json output to capture Claude's session_id.
-	// Resumed session: use text output with --resume.
-	outputFormat := "text"
-	if isNew {
-		outputFormat = "json"
-	}
-
-	args := []string{"claude", "-p", prompt, "--output-format", outputFormat}
+	// Always use stream-json + verbose to reliably capture assistant text.
+	// Claude Code >=2.1.x may return empty "result" in json/text modes.
+	args := []string{"claude", "-p", prompt, "--output-format", "stream-json", "--verbose"}
 	args = append(args, securityArgs...)
 
 	if !isNew {
@@ -389,10 +452,21 @@ func execClaude(ctx context.Context, name, prompt string) (*RunResult, error) {
 		usedFallback = true
 	}
 
-	stdout := rawStdout
+	// Parse the stream-json output to extract assistant text and session info.
+	parsed := parseStreamJSON(rawStdout)
+
 	sessionId := "unknown"
 	if existing != nil {
 		sessionId = existing.SessionId
+	}
+
+	// Use assistant text from stream events; fall back to result field.
+	stdout := parsed.AssistantText
+	if stdout == "" {
+		stdout = parsed.ResultText
+	}
+	if stdout == "" {
+		stdout = rawStdout // last resort: raw output
 	}
 
 	rateLimitMessage := extractRateLimitMessage(rawStdout, stderr)
@@ -400,22 +474,17 @@ func execClaude(ctx context.Context, name, prompt string) (*RunResult, error) {
 		stdout = rateLimitMessage
 	}
 
-	// For new sessions, parse the JSON to extract session_id and result text.
+	// For new sessions, save the session_id from the stream result.
 	if rateLimitMessage == "" && isNew && exitCode == 0 {
-		var jsonResp struct {
-			SessionID string `json:"session_id"`
-			Result    string `json:"result"`
-		}
-		if jsonErr := json.Unmarshal([]byte(rawStdout), &jsonResp); jsonErr == nil {
-			sessionId = jsonResp.SessionID
-			stdout = jsonResp.Result
+		if parsed.SessionID != "" {
+			sessionId = parsed.SessionID
 			if createErr := sessions.CreateSession(sessionId); createErr != nil {
 				log.Printf("Failed to save session: %v", createErr)
 			} else {
 				log.Printf("Session created: %s", sessionId)
 			}
 		} else {
-			log.Printf("Failed to parse session from Claude output: %v", jsonErr)
+			log.Printf("No session_id found in Claude stream output")
 		}
 	}
 
